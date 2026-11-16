@@ -794,8 +794,8 @@ function Get-ElevatedRelaunchCommand {
         }
         $invoke = "& ([scriptblock]::Create([System.IO.File]::ReadAllText($(& $q $ScriptFilePath), [System.Text.UTF8Encoding]::new(`$false))))$argText"
         # 승격 창이 부모의 환경 변수를 물려받는다고 기대하지 않고 저장소 경로를 명령 안에서 다시 지정합니다.
-        $repoRoot = Split-Path (Split-Path (Split-Path (Split-Path $ScriptFilePath -Parent) -Parent) -Parent) -Parent
-        if ($ScriptFilePath -notmatch '\\scripts\\windows\\dev-env\\') { $repoRoot = Get-Dt2RepoRoot }
+        # 저장소 경로 = 파일 경로에서 \scripts\windows\ 앞부분 (dev-env·autohotkey·하위 폴더 모두 같은 규칙)
+        $repoRoot = if ($ScriptFilePath -match '^(.*?)\\scripts\\windows\\') { $Matches[1] } else { Get-Dt2RepoRoot }
         $prefix = "`$env:DT2_REPO_WIN = $(& $q $repoRoot); "
     }
     return "$prefix" + "try { $invoke } finally { Write-Host ''; [void](Read-Host '엔터(Enter) 키를 누르면 이 관리자 창을 닫습니다') }"
