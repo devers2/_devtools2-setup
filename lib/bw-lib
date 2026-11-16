@@ -820,11 +820,15 @@ bw_interactive_login() {
         for _t in 1 2 3; do
             _email=""
             prompt_text _email "📧 Bitwarden 이메일 주소" "$_prev"
-            _email="${_email//[[:space:]]/}"
+            # 공백뿐 아니라 화면에 안 보이는 문자도 지웁니다: Esc(영문 전환 키)가 남긴 키 신호, 한글 입력기가 남긴
+            # 전각 공백·조합 중 문자 등. 이메일은 ASCII 이므로 눈에 보이는 ASCII 문자(graph)만 남깁니다.
+            local _raw="$_email"
+            strip_term_escapes _email
+            _email="$(LC_ALL=C; printf '%s' "${_email//[^[:graph:]]/}")"
             if [[ "$_email" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
                 return 0
             fi
-            echo "❌ 이메일 주소 형식이 아닙니다 (예: name@example.com). (${_t}/3)" >&2
+            echo "❌ 이메일 주소 형식이 아닙니다 (예: name@example.com). 입력값: $(printf '%q' "$_raw") (${_t}/3)" >&2
         done
         _email=""
         return 1
