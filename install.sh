@@ -20,7 +20,9 @@
 # 환경 변수
 #   DT2_KEEP_ACCOUNT=y|n      계정 사용 질문의 답
 #   BW_DEFAULT_PAT_ITEM=이름  GitHub PAT 가 든 Bitwarden 항목 (기본 github.com-main, 사용자 지정 필드 "PAT")
-#   DT2_SETUP_REF=브랜치      이 저장소의 다른 브랜치로 시험할 때 (기본 main)
+#   DT2_SETUP_REF=브랜치      이 저장소의 다른 브랜치·커밋으로 시험할 때 (기본 main)
+#   DT2_SETUP_CLONE_ONLY=1    저장소 준비까지만 하고 끝냄 (Windows install.ps1 이 씀 — 리눅스 설치 단계는
+#                             Windows 쪽 설치 스크립트가 임시 sudo 와 함께 순서대로 실행)
 #
 # ⚠️ 이 저장소는 공개입니다. 회사·고객 정보, 접속 주소, 비밀값을 넣지 마십시오.
 # ==============================================================================
@@ -287,6 +289,10 @@ main() {
     [ -f "$_setup" ] || _die "$_setup 이 없습니다."
     _cleanup
     trap - EXIT INT TERM HUP
+    if [ "${DT2_SETUP_CLONE_ONLY:-0}" = 1 ]; then
+        print_done "DevTools2 저장소 준비를 마쳤습니다 (설치 단계는 이어서 Windows 쪽에서 진행)."
+        return 0
+    fi
     export DT2_KEEP_ACCOUNT="$KEEP"
     if [ "$KEEP" = n ]; then
         # 설치 Step 3 의 GitHub 로그인 연결(Bitwarden PAT 저장)을 건너뜀

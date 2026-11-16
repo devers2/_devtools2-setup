@@ -24,6 +24,33 @@ else
     echo "  SKIP  shellcheck 없음"
 fi
 
+# PowerShell 문법·정의 없는 함수 호출 검사 (pwsh 가 있을 때 — GitHub Actions ubuntu 에는 기본 포함, WSL 은 pwsh.exe)
+PS_BIN="" PS_ROOT="$ROOT"
+if command -v pwsh >/dev/null 2>&1; then
+    PS_BIN=pwsh
+elif command -v pwsh.exe >/dev/null 2>&1 && command -v wslpath >/dev/null 2>&1; then
+    PS_BIN=pwsh.exe PS_ROOT="$(wslpath -w "$ROOT")"
+fi
+if [ -n "$PS_BIN" ]; then
+    out=$(timeout 120 "$PS_BIN" -NoProfile -Command "
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new(\$false); \$root = '$PS_ROOT'; \$defs = @{}; \$bad = @()
+foreach (\$f in 'install.ps1', 'lib/ui.ps1') {
+    \$t = [IO.File]::ReadAllText((Join-Path \$root \$f), [Text.UTF8Encoding]::new(\$false)); \$e = \$null
+    \$a = [System.Management.Automation.Language.Parser]::ParseInput(\$t, [ref]\$null, [ref]\$e)
+    if (\$e) { \$bad += \$e | ForEach-Object { \"\$f L\$(\$_.Extent.StartLineNumber): \$(\$_.Message)\" } }
+    \$a.FindAll({ \$args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] }, \$true) | ForEach-Object { \$defs[\$_.Name] = 1 }
+}
+\$t = [IO.File]::ReadAllText((Join-Path \$root 'install.ps1'), [Text.UTF8Encoding]::new(\$false))
+\$a = [System.Management.Automation.Language.Parser]::ParseInput(\$t, [ref]\$null, [ref]\$null)
+\$a.FindAll({ \$args[0] -is [System.Management.Automation.Language.CommandAst] }, \$true) | ForEach-Object { \$_.GetCommandName() } |
+    Where-Object { \$_ -and -not \$defs[\$_] -and -not (Get-Command \$_ -ErrorAction SilentlyContinue) } | Sort-Object -Unique |
+    ForEach-Object { \$bad += \"정의 없는 함수: \$_\" }
+\$bad" 2>&1 | tr -d '\r')
+    check "install.ps1·ui.ps1 문법과 함수 정의 ($PS_BIN)" '[ -z "$out" ]' "$out"
+else
+    echo "  SKIP  pwsh 없음 (PowerShell 검사)"
+fi
+
 # 함수만 불러오는 셸: HOME 을 임시 폴더로 바꿔 이 PC 의 설정을 건드리지 않음
 run() {
     HOME="$T/home" XDG_CONFIG_HOME="$T/home/.config" GIT_CONFIG_NOSYSTEM=1 DT2_NONINTERACTIVE=1 bash -c "
@@ -73,6 +100,9 @@ out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/plain'; DT2_REPO_URL='
 check "Git 저장소가 아닌 폴더는 .bak 으로 옮기고 clone" '[ -d "$T/plain/.git" ] && ls -d "$T"/plain.bak.* >/dev/null 2>&1' "$out"
 
 echo "▶ 5. 정리 (_cleanup)"
+check "DT2_SETUP_CLONE_ONLY=1 이면 설치 스크립트를 실행하지 않고 끝냄 (Windows 용)" \
+    'grep -q "DT2_SETUP_CLONE_ONLY:-0}\" = 1 ]; then" "$ROOT/install.sh" && awk "/DT2_SETUP_CLONE_ONLY:-0/{f=1} f&&/return 0/{print \"OK\"; exit} f&&/exec bash/{exit}" "$ROOT/install.sh" | grep -q OK'
+
 out=$(run "KEEP=n; _HAD_DT2_HOME=false; _make_work_dir; w=\$WORK; BW_GH_PAT=secret; _cleanup
 [ -d \"\$w\" ] && echo LEFT; echo \"PAT=\${BW_GH_PAT:-}\"")
 check "임시 폴더·PAT 변수 삭제" '! grep -q LEFT <<<"$out" && grep -qx "PAT=" <<<"$out"' "$out"
