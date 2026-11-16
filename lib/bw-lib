@@ -95,19 +95,11 @@ if ! command -v prompt_confirm &>/dev/null; then
     fi
     unset _bw_common
 fi
-
-# ── 터미널 모드 정규화 헬퍼 ──────────────────────────────────────────────────
-# bind -x (Readline 단축키) 환경에서 터미널을 canonical 모드로 복원합니다.
-# Readline이 설정한 raw 모드(-icanon -icrnl)에서는 Enter(\r)가 Newline(\n)으로 변환되지 않아
-# fzf 이후 실행되는 서브 스크립트나 비밀번호 입력(read, sudo)에서 엔터가 먹통이 되거나 인증에 실패합니다.
-if ! command -v normalize_tty &>/dev/null; then
-    normalize_tty() {
-        if [ -c /dev/tty ]; then
-            stty icanon icrnl echo < /dev/tty 2>/dev/null || true
-        elif [ -t 0 ]; then
-            stty icanon icrnl echo 2>/dev/null || true
-        fi
-    }
+# _common.sh 가 없을 때(시작 스크립트 install.sh 등)는 같은 폴더의 ui-lib 을 불러옵니다(원본은 ui-lib 하나 —
+# 예전에는 normalize_tty·strip_term_escapes 를 이 파일에도 따로 두었음).
+if ! command -v prompt_confirm &>/dev/null && [ -f "$(dirname "${BASH_SOURCE[0]}")/ui-lib" ]; then
+    # shellcheck source=ui-lib
+    source "$(dirname "${BASH_SOURCE[0]}")/ui-lib"
 fi
 
 # ── 클립보드 복사 및 보안 삭제 유틸리티 ──────────────────────────────────────
@@ -204,22 +196,6 @@ os.chmod(path, 0o600)
 # ── 인메모리 비ASCII 문자 검사 함수 (프로세스 인자 노출 방지) ─────────────────
 # C 로케일에서 [:print:] 는 0x20~0x7E 이므로, 그 밖의 바이트가 하나라도 있으면 참
 has_non_ascii() ( LC_ALL=C; [[ "$1" == *[![:print:]]* ]] )
-
-# 터미널 키 신호 제거 — strip_term_escapes <변수 이름>
-# 비밀번호처럼 화면에 안 보이게(read -s) 받은 입력에서 ESC(0x1B)로 시작하는 키 신호를 지운다.
-# Esc 를 눌러 영문으로 바꾸는 설정(Windows AutoHotkey 의 ~Esc — 원래 Esc 도 그대로 전달, Linux keyd 의 esc + Ctrl+Alt+Shift+F11)은
-# 입력 중에 누르면 ESC·`ESC[23;8~` 같은 문자열이 입력값에 섞여, 비영문 검사에 걸리거나 비밀번호가 틀린다.
-# 비밀번호에 ESC 가 들어갈 일은 없으므로 지워도 안전하다. 값이 프로세스 인자로 노출되지 않게 bash 안에서만 처리한다.
-strip_term_escapes() {
-    local LC_ALL=C _s="${!1}" _old
-    _old=$(shopt -p extglob)
-    shopt -s extglob
-    _s="${_s//$'\e'\[*([0-9;?])[@-~]/}"   # CSI: ESC [ 숫자·; 끝문자(기능키·방향키 등)
-    _s="${_s//$'\e'O[@-~]/}"              # SS3: ESC O 끝문자(F1~F4 등)
-    _s="${_s//$'\e'/}"                    # 남은 ESC(Esc 키 단독)
-    eval "$_old"
-    printf -v "$1" '%s' "$_s"
-}
 
 # ── 세션 파일 경로 결정 ────────────────────────────────────────────────────────
 _BW_HOME_DIR="${HOME:-$USERPROFILE}"
