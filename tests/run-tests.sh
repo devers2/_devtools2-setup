@@ -71,6 +71,13 @@ check "잘못된 값 → 거부" 'grep -q "y 또는 n" <<<"$out" && ! grep -q "K
 out=$(run "unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
 check "터미널 없음·값 없음 → 거부 (기본값 없음)" 'grep -q "DT2_KEEP_ACCOUNT=y 또는 n" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
 
+echo "▶ 2-1. 입력값 정리 (dt2_clean_input — prompt_read 가 모든 입력에 적용)"
+clean() { LANG=C.UTF-8 LC_ALL=C.UTF-8 bash -c 'source "$1"; v="$2"; dt2_clean_input v; printf "%s" "$v"' _ "$ROOT/lib/ui-lib" "$1"; }
+check "앞뒤 공백·전각 공백 자름, 가운데 공백은 유지" '[ "$(clean $'"'"'\xe3\x80\x80 a b  '"'"')" = "a b" ]'
+check "Esc 키 신호 제거" '[ "$(clean $'"'"'\e[23;8~abc'"'"')" = "abc" ]'
+check "깨진 한글 조합 바이트 제거, 정상 한글은 유지" '[ "$(clean $'"'"'\xe3\x84한글'"'"')" = "한글" ]'
+check "폭 없는 공백·BOM 제거" '[ "$(clean $'"'"'\xe2\x80\x8bx\xef\xbb\xbfy'"'"')" = "xy" ]'
+
 echo "▶ 3. 일회성 git 자격 증명 (PAT 를 파일에 남기지 않음)"
 git config --file "$T/home/.gitconfig" credential.helper store
 out=$(run "KEEP=n; BW_GH_USER=tester; BW_GH_PAT=pat-secret-123

@@ -626,6 +626,8 @@ bw_setup_git_config() {
     local _final_git_name _final_git_email
     _final_git_name="${_input_git_name:-$_bw_default_name}"
     _final_git_email="${_input_git_email:-$_bw_default_email}"
+    # 이메일은 ASCII 라 눈에 보이는 ASCII 문자만 남깁니다(Bitwarden 이메일 입력과 같은 규칙)
+    _final_git_email="$(LC_ALL=C; printf '%s' "${_final_git_email//[^[:graph:]]/}")"
     # 이름에서 @ 문자 제거 (혹시 포함 시)
     _final_git_name=$(echo "$_final_git_name" | tr -d '@')
 
