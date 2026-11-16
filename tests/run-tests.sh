@@ -95,11 +95,23 @@ echo x >"$T/dt2/local.txt" && git -C "$T/dt2" add local.txt
 git -C "$src" -c user.name=t -c user.email=t@t commit -q --allow-empty -m three
 out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/dt2'; DT2_REPO_URL='$src'; _sync_repo")
 check "고친 파일이 있으면 맞추지 않음" '[ "$(git -C "$T/dt2" log -1 --format=%s)" = two ] && grep -q "커밋하지 않은 변경" <<<"$out"' "$out"
+git -C "$T/dt2" reset -q --hard && git -C "$T/dt2" clean -qfd
+sub="$T/sub"; git init -q -b main "$sub" && echo a >"$sub/a.sh" && git -C "$sub" add a.sh && git -C "$sub" -c user.name=t -c user.email=t@t commit -qm s
+git -C "$src" -c protocol.file.allow=always submodule add -q "$sub" public >/dev/null 2>&1 && git -C "$src" -c user.name=t -c user.email=t@t commit -qm four
+out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/dt2'; DT2_REPO_URL='$src'; git config --global protocol.file.allow always; _sync_repo")
+chmod +x "$T/dt2/public/a.sh" 2>/dev/null
+git -C "$src" -c user.name=t -c user.email=t@t commit -q --allow-empty -m five
+out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/dt2'; DT2_REPO_URL='$src'; git config --global protocol.file.allow always; _sync_repo")
+check "submodule 안 권한 변화는 무시하고 최신으로 맞춤" '[ "$(git -C "$T/dt2" log -1 --format=%s)" = five ]' "$out"
 mkdir -p "$T/plain" && echo keep >"$T/plain/f"
 out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/plain'; DT2_REPO_URL='$src'; _sync_repo")
 check "Git 저장소가 아닌 폴더는 .bak 으로 옮기고 clone" '[ -d "$T/plain/.git" ] && ls -d "$T"/plain.bak.* >/dev/null 2>&1' "$out"
 
 echo "▶ 5. 정리 (_cleanup)"
+# _devtools2 의 설치 Step 0 이 *.sh 를 실행 가능으로 바꾸므로, git 에 실행 비트 없이 들어가면 submodule 이 "고친 파일"로 보입니다
+nonexec=$(cd "$ROOT" && git ls-files -s -- '*.sh' 2>/dev/null | awk '$1 != "100755" {print $4}')
+check "*.sh 가 git 에 실행 비트(100755)로 기록됨" '[ -z "$nonexec" ]' "$nonexec"
+
 check "DT2_SETUP_CLONE_ONLY=1 이면 설치 스크립트를 실행하지 않고 끝냄 (Windows 용)" \
     'grep -q "DT2_SETUP_CLONE_ONLY:-0}\" = 1 ]; then" "$ROOT/install.sh" && awk "/DT2_SETUP_CLONE_ONLY:-0/{f=1} f&&/return 0/{print \"OK\"; exit} f&&/exec bash/{exit}" "$ROOT/install.sh" | grep -q OK'
 

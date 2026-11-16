@@ -230,7 +230,9 @@ _sync_repo() {
     if [ -d "$DT2_DIR/.git" ]; then
         local _branch
         _branch=$(git -C "$DT2_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
-        if ! git -C "$DT2_DIR" diff --quiet 2>/dev/null || ! git -C "$DT2_DIR" diff --staged --quiet 2>/dev/null; then
+        # submodule(public/) 안의 작업 트리 변화(설치 Step 0 의 chmod 등)는 무시합니다 — submodule 은 아래 update 가 맞춥니다.
+        if ! git -C "$DT2_DIR" diff --quiet --ignore-submodules=dirty 2>/dev/null \
+            || ! git -C "$DT2_DIR" diff --staged --quiet --ignore-submodules=dirty 2>/dev/null; then
             print_warn "$DT2_DIR 에 커밋하지 않은 변경이 있어 최신으로 맞추지 않고 그대로 진행합니다."
         elif [ "$_branch" != main ]; then
             print_warn "$DT2_DIR 이 main 이 아닌 '${_branch:-분리된 HEAD}' 에 있어 최신으로 맞추지 않고 그대로 진행합니다."
@@ -290,7 +292,7 @@ main() {
     _cleanup
     trap - EXIT INT TERM HUP
     if [ "${DT2_SETUP_CLONE_ONLY:-0}" = 1 ]; then
-        print_done "DevTools2 저장소 준비를 마쳤습니다 (설치 단계는 이어서 Windows 쪽에서 진행)."
+        print_done "DevTools2 저장소 준비를 마쳤습니다 (DT2_SETUP_CLONE_ONLY=1 — 설치 단계는 실행하지 않음)."
         return 0
     fi
     export DT2_KEEP_ACCOUNT="$KEEP"
