@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# _devtools2-setup 시험 — sudo·Bitwarden 계정 없이 돌립니다.
+#   bash tests/run-tests.sh                  기본 시험
+#   DT2_TEST_NETWORK=1 bash tests/run-tests.sh   + Bitwarden CLI 실제 다운로드·SHA-256 확인
+# ==============================================================================
+set -uo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+T="$(mktemp -d)"
+trap 'rm -rf -- "$T"' EXIT
+PASS=0 FAIL=0
+ok() { PASS=$((PASS + 1)); printf '  PASS  %s\n' "$1"; }
+no() { FAIL=$((FAIL + 1)); printf '  FAIL  %s\n' "$1"; [ -z "${2:-}" ] || printf '        %s\n' "${2//$'\n'/$'\n'        }"; }
+check() { if eval "$2"; then ok "$1"; else no "$1" "${3:-}"; fi; }
+
+echo "▶ 1. 문법"
+for f in install.sh lib/ui-lib lib/bw-lib; do
+    check "bash -n $f" "bash -n '$ROOT/$f'"
+done
+if command -v shellcheck >/dev/null 2>&1; then
+    out=$(cd "$ROOT" && shellcheck -x -S warning install.sh lib/ui-lib 2>&1)
+    check "shellcheck (install.sh·ui-lib)" '[ -z "$out" ]' "$out"
+else
+    echo "  SKIP  shellcheck 없음"
+fi
+
+# 함수만 불러오는 셸: HOME 을 임시 폴더로 바꿔 이 PC 의 설정을 건드리지 않음
+run() {
+    HOME="$T/home" XDG_CONFIG_HOME="$T/home/.config" GIT_CONFIG_NOSYSTEM=1 DT2_NONINTERACTIVE=1 bash -c "
+set -uo pipefail
+source '$ROOT/install.sh'
+source '$ROOT/lib/ui-lib'
+source '$ROOT/lib/bw-lib'
+_sudo() { \"\$@\"; }; dt2_sudo_auth() { :; }
+$1" 2>&1
+}
+mkdir -p "$T/home"
+
+echo "▶ 2. 계정 사용 질문"
+check "DT2_KEEP_ACCOUNT=y → y" '[ "$(run "DT2_KEEP_ACCOUNT=y; _ask_keep_account; echo \$KEEP")" = y ]'
+check "DT2_KEEP_ACCOUNT=N → n" '[ "$(run "DT2_KEEP_ACCOUNT=N; _ask_keep_account; echo \$KEEP")" = n ]'
+out=$(run "DT2_KEEP_ACCOUNT=x; _ask_keep_account; echo KEEP=\$KEEP")
+check "잘못된 값 → 거부" 'grep -q "y 또는 n" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
+out=$(run "unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
+check "터미널 없음·값 없음 → 거부 (기본값 없음)" 'grep -q "DT2_KEEP_ACCOUNT=y 또는 n" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
+
+echo "▶ 3. 일회성 git 자격 증명 (PAT 를 파일에 남기지 않음)"
+git config --file "$T/home/.gitconfig" credential.helper store
+out=$(run "KEEP=n; BW_GH_USER=tester; BW_GH_PAT=pat-secret-123
+printf 'protocol=https\nhost=github.com\n\n' | _git credential fill")
+check "도우미가 메모리의 계정을 돌려줌" 'grep -qx "username=tester" <<<"$out" && grep -qx "password=pat-secret-123" <<<"$out"' "$out"
+run "KEEP=n; BW_GH_USER=tester; BW_GH_PAT=pat-secret-123
+printf 'protocol=https\nhost=github.com\nusername=tester\npassword=pat-secret-123\n\n' | _git credential approve" >/dev/null
+check "기존 store 도우미를 꺼서 ~/.git-credentials 에 저장 안 됨" '! grep -rqs "pat-secret-123" "$T/home"'
+out=$(run "KEEP=y; printf 'protocol=https\nhost=github.com\nusername=me\npassword=kept\n\n' | _git credential approve; cat \"\$HOME/.git-credentials\"")
+check "y 이면 이 PC 의 도우미를 그대로 씀 (대조)" 'grep -q "me:kept@github.com" <<<"$out"' "$out"
+rm -f "$T/home/.git-credentials"
+
+echo "▶ 4. 저장소 준비 (_sync_repo, 로컬 저장소로)"
+src="$T/src"
+git init -q -b main "$src" && git -C "$src" -c user.name=t -c user.email=t@t commit -q --allow-empty -m one
+out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/dt2'; DT2_REPO_URL='$src'; _sync_repo")
+check "없으면 clone" '[ -d "$T/dt2/.git" ]' "$out"
+git -C "$src" -c user.name=t -c user.email=t@t commit -q --allow-empty -m two
+out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/dt2'; DT2_REPO_URL='$src'; _sync_repo")
+check "있으면 최신으로 fast-forward" '[ "$(git -C "$T/dt2" log -1 --format=%s)" = two ]' "$out"
+echo x >"$T/dt2/local.txt" && git -C "$T/dt2" add local.txt
+git -C "$src" -c user.name=t -c user.email=t@t commit -q --allow-empty -m three
+out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/dt2'; DT2_REPO_URL='$src'; _sync_repo")
+check "고친 파일이 있으면 맞추지 않음" '[ "$(git -C "$T/dt2" log -1 --format=%s)" = two ] && grep -q "커밋하지 않은 변경" <<<"$out"' "$out"
+mkdir -p "$T/plain" && echo keep >"$T/plain/f"
+out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/plain'; DT2_REPO_URL='$src'; _sync_repo")
+check "Git 저장소가 아닌 폴더는 .bak 으로 옮기고 clone" '[ -d "$T/plain/.git" ] && ls -d "$T"/plain.bak.* >/dev/null 2>&1' "$out"
+
+echo "▶ 5. 정리 (_cleanup)"
+out=$(run "KEEP=n; _HAD_DT2_HOME=false; _make_work_dir; w=\$WORK; BW_GH_PAT=secret; _cleanup
+[ -d \"\$w\" ] && echo LEFT; echo \"PAT=\${BW_GH_PAT:-}\"")
+check "임시 폴더·PAT 변수 삭제" '! grep -q LEFT <<<"$out" && grep -qx "PAT=" <<<"$out"' "$out"
+
+if [ "${DT2_TEST_NETWORK:-0}" = 1 ]; then
+    echo "▶ 6. Bitwarden CLI 받기 (네트워크)"
+    out=$(run "DT2_DIR='$T/none'; _make_work_dir; _prepare_bw && bw --version; _cleanup")
+    check "GitHub 릴리스에서 받아 SHA-256 확인 후 실행됨" 'grep -Eq "^[0-9]+\.[0-9]+\.[0-9]+" <<<"$(tail -1 <<<"$out")"' "$out"
+fi
+
+echo ""
+echo "결과: 통과 $PASS, 실패 $FAIL"
+[ "$FAIL" -eq 0 ]
