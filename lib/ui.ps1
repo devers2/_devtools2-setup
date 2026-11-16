@@ -90,14 +90,14 @@ function Prompt-Confirm {
         Write-Host "$Message [" -ForegroundColor Yellow -NoNewline
         Write-Host "Y" -ForegroundColor Green -NoNewline
         Write-Host "/n]: " -ForegroundColor Yellow -NoNewline
-        $ans = Read-Host
+        $ans = Read-Dt2Input
         if ([string]::IsNullOrWhiteSpace($ans)) { return $true }
         return (Test-YesAnswer $ans)
     } else {
         Write-Host "$Message [y/" -ForegroundColor Yellow -NoNewline
         Write-Host "N" -ForegroundColor Green -NoNewline
         Write-Host "]: " -ForegroundColor Yellow -NoNewline
-        $ans = Read-Host
+        $ans = Read-Dt2Input
         if ([string]::IsNullOrWhiteSpace($ans)) { return $false }
         return (Test-YesAnswer $ans)
     }
@@ -111,6 +111,34 @@ function Test-YesAnswer {
     if ([string]::IsNullOrWhiteSpace($Answer)) { return $false }
     $a = $Answer.Trim()
     return ($a -match '^[Yy]' -or $a.StartsWith([string][char]0x315B))
+}
+
+# 입력값 정리 — bash ui-lib 의 dt2_clean_input 과 같은 규칙
+#   제어 문자(Esc 키 신호 포함)·폭 없는 공백(U+200B~200D)·BOM(U+FEFF)을 지우고 앞뒤 공백(전각 포함)을 자릅니다.
+#   가운데 공백과 한글 등 정상 문자는 그대로 둡니다. 비밀번호는 Prompt-Password 가 따로 받습니다.
+function ConvertTo-Dt2CleanInput {
+    param([string]$Text)
+    if ($null -eq $Text) { return '' }
+    $t = $Text -replace '\x1B\[[0-9;?]*[@-~]', '' -replace '\x1BO[@-~]', '' -replace '[\x00-\x1F\x7F]', '' -replace '[\u200B-\u200D\uFEFF]', ''
+    return $t.Trim()
+}
+
+# Read-Host + 입력값 정리 (자유 입력은 Read-Host 대신 이 함수를 씁니다)
+function Read-Dt2Input {
+    param([string]$Prompt = '')
+    $raw = if ($Prompt) { Read-Host $Prompt } else { Read-Host }
+    return (ConvertTo-Dt2CleanInput $raw)
+}
+
+# 기본값 없는 y/n 질문 — y 면 $true, n 이면 $false. Enter 만 누르면 다시 묻습니다(한글 입력 상태의 ㅛ·ㅜ 도 받음).
+function Read-Dt2YesNo {
+    param([string]$Prompt = '선택 [y/n]')
+    while ($true) {
+        $a = (Read-Dt2Input $Prompt).ToLower()
+        if ($a -match '^(y|yes)$' -or $a -eq [string][char]0x315B) { return $true }
+        if ($a -match '^(n|no)$' -or $a -eq [string][char]0x315C) { return $false }
+        Write-Warn "y 또는 n 을 입력해 주세요."
+    }
 }
 
 # 번호 선택 대화형 프롬프트 공용 헬퍼 (Prompt-Confirm 의 숫자형 버전)
@@ -151,7 +179,7 @@ function Prompt-Choice {
             }
         }
         Write-Host "]: " -ForegroundColor Yellow -NoNewline
-        $ans = Read-Host
+        $ans = Read-Dt2Input
         $ans = $ans.Trim()
         if ($ans -eq "") { $ans = "$Default" }
         [int]::TryParse($ans, [ref]$result) | Out-Null

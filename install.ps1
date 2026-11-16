@@ -85,7 +85,7 @@ if (-not $isAdmin) {
         if (-not [string]::IsNullOrEmpty($PSCommandPath)) {
             Write-Host " (또는 탐색기에서 install.ps1 우클릭 → PowerShell 관리자로 실행)" -ForegroundColor DarkGray
             Write-Host ""
-            Read-Host "엔터를 누르면 종료합니다"
+            Pause-Script
         }
         # ⚠️ exit 대신 return 사용: irm | iex 환경에서 exit 을 호출하면 터미널 창 자체가
         # 즉시 닫혀버려 사용자가 안내 메시지를 읽을 수 없습니다. return 으로 프롬프트에 메시지를 보존합니다.
@@ -969,7 +969,7 @@ function Install-NewDevtools2Distro {
         $createdUsername = ""
         while ([string]::IsNullOrEmpty($createdUsername)) {
             Write-Host "👉 사용자 이름(Username) 입력 [기본값: $windowsUser]: " -ForegroundColor Yellow -NoNewline
-            $inputUser = Read-Host
+            $inputUser = Read-Dt2Input
             $candidate = if ([string]::IsNullOrWhiteSpace($inputUser)) { $windowsUser } else { $inputUser.Trim() }
             $candidate = $candidate.Trim([char]0xFEFF).Trim().ToLower()
 
@@ -1258,7 +1258,7 @@ Write-Host ""
 # ==============================================================================
 # 계정 사용 질문 → 배포판 안에서 install.sh (Bitwarden 로그인 → _devtools2 clone)
 # ==============================================================================
-# 기본값 없음: Enter 만 누르면 다시 묻습니다. 한글 입력 상태의 y·n 키(ㅛ·ㅜ)도 받습니다.
+# 기본값 없음: Enter 만 누르면 다시 묻습니다. 한글 입력 상태의 y·n 키(ㅛ·ㅜ)도 받습니다(Read-Dt2YesNo — lib/ui.ps1).
 $keepAccount = ''
 if ($env:DT2_KEEP_ACCOUNT -match '^[YyNn]') {
     $keepAccount = $env:DT2_KEEP_ACCOUNT.Substring(0, 1).ToLower()
@@ -1267,15 +1267,7 @@ if ($env:DT2_KEEP_ACCOUNT -match '^[YyNn]') {
     Write-Host "👉 설치에 사용할 Bitwarden/GitHub 계정을 현재 PC 에서 사용하시겠습니까? [y/n]" -ForegroundColor Yellow
     Write-Host "   y: 이 PC 에 Bitwarden 로그인과 GitHub 계정 정보(PAT·gh 로그인)를 저장합니다."
     Write-Host "   n: 일회성 설치 — 설치에만 사용하고, 끝나면 이 PC 에 계정 정보를 남기지 않습니다."
-    while (-not $keepAccount) {
-        $_ans = Read-Host "   선택 [y/n]"
-        if ($null -eq $_ans) { $_ans = '' }
-        switch -Regex ($_ans.Trim().ToLower()) {
-            '^(y|yes|ㅛ)$' { $keepAccount = 'y' }
-            '^(n|no|ㅜ)$'  { $keepAccount = 'n' }
-            default        { Write-Warn "y 또는 n 을 입력해 주세요." }
-        }
-    }
+    $keepAccount = if (Read-Dt2YesNo '   선택 [y/n]') { 'y' } else { 'n' }
 }
 $env:DT2_KEEP_ACCOUNT = $keepAccount
 

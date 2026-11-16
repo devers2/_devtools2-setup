@@ -47,6 +47,13 @@ foreach (\$f in 'install.ps1', 'lib/ui.ps1') {
     ForEach-Object { \$bad += \"정의 없는 함수: \$_\" }
 \$bad" 2>&1 | tr -d '\r')
     check "install.ps1·ui.ps1 문법과 함수 정의 ($PS_BIN)" '[ -z "$out" ]' "$out"
+    # 입력값 정리(ConvertTo-Dt2CleanInput)가 bash 의 dt2_clean_input 과 같은 결과를 내는지
+    out=$(timeout 60 "$PS_BIN" -NoProfile -Command "
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new(\$false)
+. ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path '$PS_ROOT' 'lib/ui.ps1'), [Text.UTF8Encoding]::new(\$false))))
+@(([string][char]0x3000 + ' a b  '), ([string][char]27 + '[23;8~abc'), ([string][char]0x200B + 'x' + [string][char]0xFEFF + 'y')) | ForEach-Object { '[' + (ConvertTo-Dt2CleanInput \$_) + ']' }
+" 2>&1 | tr -d '\r' | tr '\n' ' ')
+    check "Windows 입력값 정리: 앞뒤·전각 공백, Esc 신호, 폭 없는 공백·BOM ($PS_BIN)" '[ "$out" = "[a b] [abc] [xy] " ]' "$out"
 else
     echo "  SKIP  pwsh 없음 (PowerShell 검사)"
 fi
