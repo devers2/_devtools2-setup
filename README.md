@@ -42,5 +42,14 @@ curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/insta
 | `lib/ui-lib` | 색·출력·질문 공용 함수 — _devtools2 의 `_common.sh` 도 이 파일을 씀 |
 | `lib/bw-lib` | Bitwarden 공용 라이브러리 — _devtools2 의 `scripts/fzf/bw-lib` 이 이 파일을 가리킴 |
 | `tests/run-tests.sh` | 시험 (sudo·Bitwarden 계정 없이 실행) |
+| `s2-office-converter/` | s2-docflow 변환기 서버 설치 스크립트 — **원본은 비공개 s2-docflow 의 `scripts/`**, main 에 push 되면 그쪽 CI 가 여기로 복사합니다(여기서 고치지 않음) |
 
 `lib/` 의 원본은 이 저장소 하나입니다. _devtools2 는 이 저장소를 submodule 로 불러 씁니다.
+
+## s2-office-converter (서버 설치)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh | bash
+```
+
+사용법은 [s2-office-converter/README.md](s2-office-converter/README.md) 를 보십시오.

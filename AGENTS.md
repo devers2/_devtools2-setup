@@ -12,4 +12,6 @@
    PAT·Bitwarden 세션을 파일·명령 인자·git 설정에 쓰는 코드를 넣지 않습니다.
 6. PowerShell 은 5.1·7 모두에서 동작해야 합니다: `??` 금지, `param()` 은 맨 위, 파일은 UTF-8 NoBOM 이고
    PS 5.1 이 NoBOM 한글 파일을 CP949 로 읽으므로 파일을 직접 실행하지 않고 UTF-8 로 읽어 스크립트블록으로 실행합니다(`Invoke-Dt2LocalScript`).
-7. 주석·문서·커밋 메시지는 한국어로 씁니다.
+7. `s2-office-converter/` 는 s2-docflow CI 만 씁니다(원본은 비공개 s2-docflow 의 `scripts/`). 여기서 고치면 다음 복사 때 덮어써지므로
+   고칠 내용은 s2-docflow 에서 고칩니다.
+8. 주석·문서·커밋 메시지는 한국어로 씁니다.
