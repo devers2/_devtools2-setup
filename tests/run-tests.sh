@@ -85,6 +85,12 @@ check "Esc 키 신호 제거" '[ "$(clean $'"'"'\e[23;8~abc'"'"')" = "abc" ]'
 check "깨진 한글 조합 바이트 제거, 정상 한글은 유지" '[ "$(clean $'"'"'\xe3\x84한글'"'"')" = "한글" ]'
 check "폭 없는 공백·BOM 제거" '[ "$(clean $'"'"'\xe2\x80\x8bx\xef\xbb\xbfy'"'"')" = "xy" ]'
 
+# 설치 단계 스크립트는 set -euo pipefail 이라 정리 함수 안의 명령 하나만 실패해도 입력 직후 스크립트가 끝납니다
+# (예전: shopt -p extglob 이 종료 코드 1 → npm 설치 방식 질문 직후 "핵심 도구 설치 실패").
+strict_clean() { bash -c 'set -euo pipefail; source "$1"; v="$2"; dt2_clean_input v; printf "[%s]" "$v"' _ "$ROOT/lib/ui-lib" "$1" 2>&1; }
+check "set -euo pipefail 에서도 끝나지 않음 (빈 입력)" '[ "$(strict_clean "")" = "[]" ]' "$(strict_clean "")"
+check "set -euo pipefail 에서도 끝나지 않음 (보통 입력)" '[ "$(strict_clean " 1 ")" = "[1]" ]' "$(strict_clean " 1 ")"
+
 echo "▶ 3. 일회성 git 자격 증명 (PAT 를 파일에 남기지 않음)"
 git config --file "$T/home/.gitconfig" credential.helper store
 out=$(run "KEEP=n; BW_GH_USER=tester; BW_GH_PAT=pat-secret-123

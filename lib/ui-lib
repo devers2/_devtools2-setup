@@ -203,7 +203,9 @@ prompt_key() {
 # 비밀번호에 ESC 가 들어갈 일은 없으므로 지워도 안전하다. 값이 프로세스 인자로 노출되지 않게 bash 안에서만 처리한다.
 strip_term_escapes() {
     local LC_ALL=C _s="${!1}" _old
-    _old=$(shopt -p extglob)
+    # ⚠️ || true 필수: shopt -p 는 옵션이 꺼져 있으면 종료 코드 1 → set -e 스크립트(설치 단계)가 여기서 아무 말 없이 끝났습니다
+    #    (prompt_read 가 모든 입력에 이 함수를 쓰므로 "선택 [1/2]:" 직후 "핵심 도구 설치 실패" — 새 PC 설치 실측).
+    _old=$(shopt -p extglob || true)
     shopt -s extglob
     _s="${_s//$'\e'\[*([0-9;?])[@-~]/}"   # CSI: ESC [ 숫자·; 끝문자(기능키·방향키 등)
     _s="${_s//$'\e'O[@-~]/}"              # SS3: ESC O 끝문자(F1~F4 등)
