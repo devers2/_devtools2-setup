@@ -17,6 +17,16 @@ WSL·리눅스:
 curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.sh | bash
 ```
 
+설치 스크립트가 중간에 실패했을 때 (내 PC — AI 로 바로 고치기):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.sh | bash -s -- --ai
+```
+
+전체 설치 대신 계정 확인 → DevTools2 받기 → AI 에이전트 CLI 설치 → AI 공통 설정(agent-notes 받기·규칙 적용)까지만 하고 끝냅니다.
+그 뒤 `cd /var/opt/_devtools2 && claude` 로 고치고 설치를 다시 실행합니다. Windows 는 `wsl -d devtools2` 로 들어가 같은 명령을 실행합니다.
+비공개 작업 노트를 받으므로 **내 계정일 때만** 동작합니다(일회성·다른 사람의 계정이면 아무것도 하지 않고 끝남).
+
 다시 실행하면 이미 된 단계는 건너뛰고 DevTools2 를 최신으로 맞춘 뒤 설치를 이어 갑니다(업데이트).
 
 설치를 시작하면 먼저 이 PC 에 저장된 GitHub 계정을 확인합니다.

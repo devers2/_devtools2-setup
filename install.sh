@@ -9,6 +9,13 @@
 #   3) 비공개 저장소 _devtools2 를 /var/opt/_devtools2 로 clone (이미 있으면 최신으로 맞춤)
 #   4) 그 안의 scripts/linux/setup-devtools2.sh 실행
 #
+# --ai: AI 로 고치기 위한 최소 준비만 (전체 설치는 하지 않음)
+#   curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.sh | bash -s -- --ai
+#   설치 스크립트가 중간에 실패한 내 PC 에서 AI 로 바로 고치기 위한 모드입니다.
+#   계정 확인 → _devtools2 받기(있으면 최신으로) → AI 에이전트 CLI 설치(tool.setup-agents.sh)
+#   → AI 공통 설정(tool.setup-agent-notes.sh — agent-notes 받기·규칙 적용) 까지만 하고 끝냅니다.
+#   비공개 작업 노트를 받으므로 내 계정일 때만 동작합니다(일회성·다른 사람의 계정이면 아무것도 하지 않고 끝남).
+#
 # 계정 사용 (DT2_KEEP_ACCOUNT=y|n 로 묻지 않고 지정)
 #   (지정하지 않으면) 이 PC 에 저장된 GitHub 계정이 DevTools2 저장소에 접근되면 묻지 않고 그대로 씁니다.
 #      계정은 있는데 접근이 안 되면 GitHub API 로 까닭을 나눕니다: 다른 사람의 계정(PAT 유효·권한 없음)이면 일회성/중단,
@@ -39,6 +46,7 @@ SETUP_REF="${DT2_SETUP_REF:-main}"
 
 KEEP=""
 WORK=""
+AI_ONLY=0   # --ai: AI 로 고치기 위한 최소 준비만
 _HAD_DT2_HOME=false
 
 _die() { printf '[오류] %s\n' "$*" >&2; exit 1; }
@@ -168,6 +176,16 @@ _ask_keep_account() {
     local _ans=""
     _detect_account
     [ "$ACC_STATE" = offline ] && _die "GitHub 에 연결할 수 없어 저장된 계정(${ACC_USER})을 확인하지 못했습니다. 네트워크를 확인한 뒤 다시 실행하세요."
+    # --ai: 비공개 작업 노트를 받으므로 내 계정(y)으로만 진행합니다 — 묻지 않고 y 와 같게 처리
+    #   (다른 사람의 계정이면 아래 y 처리에서 멈춤, PAT 만료면 갱신, 계정이 없으면 Bitwarden 에서 읽어 저장)
+    if [ "$AI_ONLY" = 1 ]; then
+        case "${DT2_KEEP_ACCOUNT:-}" in
+            [Nn]*) _die "--ai 는 내 계정으로만 실행합니다(비공개 작업 노트를 받음). 일회성 설치(DT2_KEEP_ACCOUNT=n)와 함께 쓸 수 없습니다." ;;
+        esac
+        [ "$ACC_STATE" = other ] && _die "--ai 는 내 계정으로만 실행합니다. 이 PC 에 저장된 GitHub 계정(${ACC_LOGIN:-$ACC_USER})은 DevTools2 저장소 권한이 없습니다(다른 사람의 계정)."
+        [ "$ACC_STATE" = none ] && print_info "--ai: 이 PC 에 저장된 GitHub 계정이 없어 Bitwarden 에서 내 계정을 읽어 저장합니다."
+        DT2_KEEP_ACCOUNT=y
+    fi
     case "${DT2_KEEP_ACCOUNT:-}" in
         [Yy]*)
             case "$ACC_STATE" in
@@ -373,7 +391,25 @@ _hand_off_account() {
     return 0
 }
 
+# ── --ai: AI 에이전트 CLI + AI 공통 설정만 실행 ──────────────────────────────────
+# 받은 저장소의 설치 단계 스크립트 두 개를 그대로 씁니다(설치 때와 같은 코드 — 여기서 따로 구현하지 않음).
+_run_ai_setup() {
+    local _dev="$DT2_DIR/scripts/linux/dev-env" _f
+    for _f in tool.setup-agents.sh tool.setup-agent-notes.sh; do
+        [ -f "$_dev/$_f" ] || _die "$_dev/$_f 이 없습니다 (저장소가 예전 버전인지 확인하세요)."
+    done
+    DEVTOOLS2="$DT2_DIR" bash "$_dev/tool.setup-agents.sh" || print_warn "AI 에이전트 CLI 단계에서 오류가 있었습니다. 계속합니다."
+    DEVTOOLS2="$DT2_DIR" bash "$_dev/tool.setup-agent-notes.sh" --now || _die "AI 공통 설정(agent-notes)에 실패했습니다."
+    echo ""
+    print_done "AI 로 고칠 준비를 마쳤습니다 (전체 설치는 실행하지 않음)."
+    print_info "새 터미널(또는 'exec bash -l')에서: cd $DT2_DIR && claude   — 고친 뒤 설치를 다시 실행하세요."
+}
+
 main() {
+    if [ "${1:-}" = "--ai" ]; then
+        AI_ONLY=1
+        shift
+    fi
     # curl … | bash 로 실행하면 표준 입력이 이 스크립트라 질문에 답할 수 없으므로, 터미널이 있으면 입력을 터미널로 돌림
     # (스크립트 전체가 main 함수 안에 있고 마지막 줄에서 부르므로, bash 가 남은 줄을 터미널에서 읽는 일은 없음)
     if [ ! -t 0 ] && { : </dev/tty; } 2>/dev/null; then
@@ -393,7 +429,11 @@ main() {
         _sudo apt-get update -qq && _sudo apt-get install -y -qq git >/dev/null || _die "git 설치에 실패했습니다."
     }
     _load_libs
-    print_banner "DevTools2 설치 시작"
+    if [ "$AI_ONLY" = 1 ]; then
+        print_banner "DevTools2 — AI 로 고치기 위한 준비 (--ai)"
+    else
+        print_banner "DevTools2 설치 시작"
+    fi
     _need_commands
     _ask_keep_account
     _prepare_account
@@ -404,6 +444,10 @@ main() {
     _cleanup
     trap - EXIT INT TERM HUP
     _hand_off_account
+    if [ "$AI_ONLY" = 1 ]; then
+        _run_ai_setup
+        return 0
+    fi
     if [ "${DT2_SETUP_CLONE_ONLY:-0}" = 1 ]; then
         print_done "DevTools2 저장소 준비를 마쳤습니다 (DT2_SETUP_CLONE_ONLY=1 — 설치 단계는 실행하지 않음)."
         return 0

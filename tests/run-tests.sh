@@ -169,6 +169,26 @@ rm -f "$T/home/.git-credentials" "$T/home/.gitconfig" "$T"/home/.git-credentials
 out=$(run "unset DT2_KEEP_ACCOUNT; _detect_account; echo STATE=\$ACC_STATE")
 check "저장된 계정 없음 → none (기존 y/n 질문으로)" 'grep -q "STATE=none" <<<"$out"' "$out"
 
+echo "▶ 2-0-3. --ai (AI 로 고치기 위한 최소 준비 — 내 계정일 때만)"
+NOACC='_check_repo_access() { return 1; }'
+out=$(run "AI_ONLY=1; DT2_KEEP_ACCOUNT=n; _ask_keep_account; echo KEEP=\$KEEP")
+check "--ai + 일회성(n) → 진행하지 않음" 'grep -q "내 계정으로만" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
+printf 'https://tester:fake-pat-000@github.com\n' >"$T/home/.git-credentials"; git config --file "$T/home/.gitconfig" credential.helper store
+out=$(run "$NOACC; bw_github_token_check() { echo someone; return 0; }; AI_ONLY=1; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
+check "--ai + 다른 사람의 계정 → 진행하지 않음" 'grep -q "다른 사람의 계정" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
+out=$(run "$NOACC; bw_github_token_check() { return 1; }; AI_ONLY=1; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP RENEW=\$RENEW")
+check "--ai + PAT 만료 → 묻지 않고 갱신(RENEW=1)" 'grep -q "KEEP=y RENEW=1" <<<"$out" && ! grep -q "선택" <<<"$out"' "$out"
+rm -f "$T/home/.git-credentials" "$T/home/.gitconfig"
+out=$(run "AI_ONLY=1; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
+check "--ai + 저장된 계정 없음 → 묻지 않고 내 계정(y)으로 Bitwarden 에서 읽기" 'grep -q "KEEP=y" <<<"$out" && ! grep -q "선택" <<<"$out"' "$out"
+mkdir -p "$T/aidt2/scripts/linux/dev-env"
+for f in tool.setup-agents.sh tool.setup-agent-notes.sh; do printf 'echo "RAN %s $*" >>"%s"\n' "$f" "$T/ai.log" >"$T/aidt2/scripts/linux/dev-env/$f"; done
+out=$(run "DT2_DIR='$T/aidt2'; _run_ai_setup")
+check "--ai 실행: 에이전트 CLI → AI 공통 설정(--now) 순서로만 실행" '[ "$(cat "$T/ai.log" 2>/dev/null)" = "$(printf "RAN tool.setup-agents.sh \nRAN tool.setup-agent-notes.sh --now")" ] && grep -q "준비를 마쳤습니다" <<<"$out"' "$out $(cat "$T/ai.log" 2>&1)"
+grep -q 'if \[ "${1:-}" = "--ai" \]; then' "$ROOT/install.sh"
+check "main 이 --ai 인수를 받음" '[ $? -eq 0 ]'
+rm -rf "$T/aidt2" "$T/ai.log"
+
 echo "▶ 2-1. 입력값 정리 (dt2_clean_input — prompt_read 가 모든 입력에 적용)"
 clean() { LANG=C.UTF-8 LC_ALL=C.UTF-8 bash -c 'source "$1"; v="$2"; dt2_clean_input v; printf "%s" "$v"' _ "$ROOT/lib/ui-lib" "$1"; }
 check "앞뒤 공백·전각 공백 자름, 가운데 공백은 유지" '[ "$(clean $'"'"'\xe3\x80\x80 a b  '"'"')" = "a b" ]'
