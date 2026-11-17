@@ -279,7 +279,6 @@ dt2_sudo_auth() {
     _user="$(id -un 2>/dev/null || echo "${USER:-}")"
     if grep -qi microsoft /proc/version 2>/dev/null; then
         print_info "${_reason}sudo 권한이 필요합니다. WSL 계정 '${_user}' 의 비밀번호를 입력하세요."
-        print_info "  (WSL 배포판을 만들 때 정한 비밀번호 — Windows·Bitwarden·GitHub 비밀번호가 아닙니다)"
     else
         print_info "${_reason}sudo 권한이 필요합니다. 리눅스 계정 '${_user}' 의 로그인 비밀번호를 입력하세요."
     fi
