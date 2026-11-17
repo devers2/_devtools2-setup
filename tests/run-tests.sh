@@ -78,27 +78,73 @@ check "잘못된 값 → 거부" 'grep -q "y 또는 n" <<<"$out" && ! grep -q "K
 out=$(run "unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
 check "터미널 없음·값 없음 → 거부 (기본값 없음)" 'grep -q "DT2_KEEP_ACCOUNT=y 또는 n" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
 
-echo "▶ 2-0. 저장된 계정 확인 (_detect_account — 접근되면 묻지 않음, 안 되면 일회성/중단)"
+echo "▶ 2-0. 저장된 계정 확인 (_detect_account — 접근되면 묻지 않음, 남의 계정·PAT 만료·네트워크 구분)"
 git config --file "$T/home/.gitconfig" credential.helper store
 printf 'https://tester:fake-pat-000@github.com\n' >"$T/home/.git-credentials"
 cred_md5=$(md5sum <"$T/home/.git-credentials")
+NOACC='_check_repo_access() { return 1; }'
+OTHER="$NOACC; bw_github_token_check() { echo someone; return 0; }"
+EXPIRED="$NOACC; bw_github_token_check() { return 1; }"
+OFFLINE="$NOACC; bw_github_token_check() { return 2; }"
 out=$(run "_check_repo_access() { return 0; }; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP STATE=\$ACC_STATE")
 check "접근되는 계정 → 묻지 않고 그대로(y), 계정 이름과 진행 안내 표시" 'grep -q "KEEP=y STATE=ok" <<<"$out" && grep -q "(tester)" <<<"$out" && grep -q "그대로 진행" <<<"$out" && ! grep -q "선택" <<<"$out"' "$out"
-out=$(run "_check_repo_access() { return 1; }; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
-check "접근 안 되는 계정·터미널 없음 → 진행하지 않음" '! grep -q "KEEP=" <<<"$out"' "$out"
-out=$(run "_check_repo_access() { return 1; }; DT2_KEEP_ACCOUNT=y; _ask_keep_account; echo KEEP=\$KEEP")
-check "접근 안 되는 계정 + DT2_KEEP_ACCOUNT=y → 거부하고 일회성 안내" 'grep -q "DT2_KEEP_ACCOUNT=n" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
-out=$(run "_check_repo_access() { return 1; }; DT2_KEEP_ACCOUNT=n; _ask_keep_account; echo KEEP=\$KEEP")
-check "접근 안 되는 계정 + DT2_KEEP_ACCOUNT=n → 일회성" 'grep -q "KEEP=n" <<<"$out"' "$out"
+out=$(run "$OTHER; _detect_account; echo STATE=\$ACC_STATE LOGIN=\$ACC_LOGIN")
+check "PAT 유효·권한 없음 → other(다른 사람의 계정)" 'grep -q "STATE=other LOGIN=someone" <<<"$out"' "$out"
+out=$(run "$EXPIRED; _detect_account; echo STATE=\$ACC_STATE")
+check "401 → expired(PAT 만료·폐기)" 'grep -q "STATE=expired" <<<"$out"' "$out"
+out=$(run "$OFFLINE; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
+check "확인 불가(네트워크) → 진행하지 않고 네트워크 안내" 'grep -q "네트워크" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
+out=$(run "$OTHER; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
+check "다른 사람의 계정·터미널 없음 → 진행하지 않음" '! grep -q "KEEP=" <<<"$out"' "$out"
+out=$(run "$OTHER; DT2_KEEP_ACCOUNT=y; _ask_keep_account; echo KEEP=\$KEEP")
+check "다른 사람의 계정 + DT2_KEEP_ACCOUNT=y → 거부하고 일회성 안내" 'grep -q "DT2_KEEP_ACCOUNT=n" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
+out=$(run "$EXPIRED; DT2_KEEP_ACCOUNT=y; _ask_keep_account; echo KEEP=\$KEEP RENEW=\$RENEW")
+check "PAT 만료 + DT2_KEEP_ACCOUNT=y → 갱신(RENEW=1)" 'grep -q "KEEP=y RENEW=1" <<<"$out"' "$out"
+out=$(run "$EXPIRED; DT2_KEEP_ACCOUNT=n; _ask_keep_account; echo KEEP=\$KEEP RENEW=\$RENEW")
+check "PAT 만료 + DT2_KEEP_ACCOUNT=n → 일회성" 'grep -q "KEEP=n RENEW=0" <<<"$out"' "$out"
+if command -v script >/dev/null 2>&1; then
+    # 실제 터미널에서 질문 답하기 (script 가 가상 터미널을 만듦)
+    ask_tty() {
+        printf '%s' "$2" | HOME="$T/home" GIT_CONFIG_NOSYSTEM=1 timeout 20 script -qec "bash -c 'source \"$ROOT/install.sh\"; source \"$ROOT/lib/ui-lib\"; source \"$ROOT/lib/bw-lib\"; $1; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP RENEW=\$RENEW'; echo rc=\$?" /dev/null 2>&1 | tr -d '\r'
+    }
+    out=$(ask_tty "$EXPIRED" $'1\n')
+    check "PAT 만료 질문: 1 → 갱신" 'grep -q "만료되었거나 폐기" <<<"$out" && grep -q "KEEP=y RENEW=1" <<<"$out"' "$out"
+    out=$(ask_tty "$EXPIRED" $'9\n2\n')
+    check "PAT 만료 질문: 잘못된 값은 다시 묻고 2 → 일회성" 'grep -q "1, 2, 3 중에서" <<<"$out" && grep -q "KEEP=n RENEW=0" <<<"$out"' "$out"
+    out=$(ask_tty "$EXPIRED" $'3\n')
+    check "PAT 만료 질문: 3 → 중단(130)" 'grep -q "rc=130" <<<"$out"' "$out"
+    out=$(ask_tty "$OTHER" $'1\n')
+    check "다른 사람의 계정 질문: 1 → 일회성 (갱신 선택지 없음)" 'grep -q "권한이 없습니다" <<<"$out" && ! grep -q "PAT 갱신" <<<"$out" && grep -q "KEEP=n" <<<"$out"' "$out"
+else
+    echo "  SKIP  터미널 질문 시험 (script 없음)"
+fi
 if [ "${DT2_TEST_NETWORK:-0}" = 1 ]; then
     # 실제 GitHub: 가짜 PAT 는 401 → 저장된 도우미를 썼다면 git 이 reject 로 이 줄을 지웠을 것
     out=$(run "_detect_account; echo STATE=\$ACC_STATE USER=\$ACC_USER")
-    check "실제 접근 실패(가짜 PAT)도 noaccess 로 판단하고 ~/.git-credentials 를 바꾸지 않음 (네트워크)" 'grep -q "STATE=noaccess USER=tester" <<<"$out" && [ "$(md5sum <"$T/home/.git-credentials")" = "$cred_md5" ]' "$out"
+    check "실제 GitHub: 가짜 PAT → expired, ~/.git-credentials 그대로 (네트워크)" 'grep -q "STATE=expired USER=tester" <<<"$out" && [ "$(md5sum <"$T/home/.git-credentials")" = "$cred_md5" ]' "$out"
 else
-    echo "  SKIP  실제 GitHub 접근 실패 시 자격 증명 보존 (DT2_TEST_NETWORK=1)"
+    echo "  SKIP  실제 GitHub 401 판정·자격 증명 보존 (DT2_TEST_NETWORK=1)"
 fi
 check "확인 중 ~/.git-credentials 를 바꾸지 않음" '[ "$(md5sum <"$T/home/.git-credentials")" = "$cred_md5" ]'
-rm -f "$T/home/.git-credentials" "$T/home/.gitconfig"
+
+echo "▶ 2-0-1. 만료된 PAT 갱신 (bw_setup_github_auth — 백업 후 교체, 남의 계정일 수 있으면 확인)"
+FAKE_BW='bw_get_github_account() { BW_GH_USER=tester BW_GH_EMAIL=t@t BW_GH_PAT=new-pat-111; }; bw_setup_git_config() { :; }; bw_setup_gh_auth() { :; }'
+out=$(run "$FAKE_BW; bw_github_token_check() { [ \"\$1\" = new-pat-111 ] && { echo tester; return 0; }; return 1; }; bw_setup_github_auth; echo rc=\$?")
+check "만료 → Bitwarden 새 PAT 로 교체, 기존 파일 백업" 'grep -q "rc=0" <<<"$out" && grep -q "new-pat-111@github.com" "$T/home/.git-credentials" && ! grep -q fake-pat-000 "$T/home/.git-credentials" && grep -qs fake-pat-000 "$T"/home/.git-credentials.bak.*' "$out"
+rm -f "$T"/home/.git-credentials.bak.*
+printf 'https://tester:still-good@github.com\n' >"$T/home/.git-credentials"
+out=$(run "$FAKE_BW; bw_github_token_check() { echo tester; return 0; }; bw_gh_auth_ok() { return 0; }; bw_setup_github_auth; echo rc=\$?")
+check "유효한 PAT → 예전처럼 그대로 (Bitwarden 안 씀)" 'grep -q "이미 설정" <<<"$out" && grep -q still-good "$T/home/.git-credentials"' "$out"
+printf 'https://otherperson:old-pat@github.com\n' >"$T/home/.git-credentials"
+out=$(run "$FAKE_BW; bw_github_token_check() { [ \"\$1\" = new-pat-111 ] && { echo tester; return 0; }; return 1; }; bw_setup_github_auth; echo rc=\$?")
+check "저장된 이름이 Bitwarden·GitHub 계정과 모두 다르면 묻고, 기본(N)이면 바꾸지 않음" 'grep -q "계정(otherperson)과" <<<"$out" && grep -q "rc=1" <<<"$out" && grep -q old-pat "$T/home/.git-credentials"' "$out"
+out=$(run "$FAKE_BW; bw_github_token_check() { return 1; }; bw_setup_github_auth; echo rc=\$?")
+check "Bitwarden 의 PAT 도 만료면 바꾸지 않고 안내" 'grep -q "Bitwarden 의 PAT 도 만료" <<<"$out" && grep -q old-pat "$T/home/.git-credentials"' "$out"
+if [ "${DT2_TEST_NETWORK:-0}" = 1 ]; then
+    out=$(run "bw_github_token_check fake-pat-000; echo rc=\$?")
+    check "실제 GitHub API: 가짜 PAT → 401(rc=1) (네트워크)" 'grep -q "rc=1" <<<"$out"' "$out"
+fi
+rm -f "$T/home/.git-credentials" "$T/home/.gitconfig" "$T"/home/.git-credentials.bak.*
 out=$(run "unset DT2_KEEP_ACCOUNT; _detect_account; echo STATE=\$ACC_STATE")
 check "저장된 계정 없음 → none (기존 y/n 질문으로)" 'grep -q "STATE=none" <<<"$out"' "$out"
 

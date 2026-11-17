@@ -22,7 +22,11 @@ curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/insta
 설치를 시작하면 먼저 이 PC 에 저장된 GitHub 계정을 확인합니다.
 
 - **계정이 있고 DevTools2 저장소에 접근되면**: 묻지 않고 그 계정으로 진행합니다(어떤 계정으로 진행하는지 화면에 표시, 계정 설정은 바꾸지 않음).
-- **계정은 있는데 접근이 안 되면**(남의 PC 의 계정, PAT 만료 등): `1) 일회성 설치` 또는 `2) 중단` 을 고릅니다. 이 PC 의 계정은 건드리지 않습니다.
+- **계정은 있는데 접근이 안 되면** GitHub 에 물어 까닭을 나눕니다.
+  - 다른 사람의 계정(PAT 는 유효하지만 저장소 권한 없음): `1) 일회성 설치` / `2) 중단`. 이 PC 의 계정은 건드리지 않습니다.
+  - PAT 만료·폐기: `1) PAT 갱신`(내 PC — Bitwarden 의 새 PAT 를 저장, 기존 `~/.git-credentials` 는 백업) / `2) 일회성 설치` / `3) 중단`.
+    저장된 이름이 Bitwarden·GitHub 계정과 모두 다르면(남의 계정일 수 있음) 바꾸기 전에 한 번 더 묻습니다.
+  - GitHub 에 연결할 수 없으면 중단하고 네트워크를 확인하라고 알립니다.
 - **계정이 없으면** 묻습니다.
 
 ```
@@ -35,7 +39,8 @@ curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/insta
 - **일회성(n)**: 남의 PC 에 설치해 주거나, 예전에 설치해 준 PC 를 업데이트할 때. Bitwarden 은 임시 폴더에서만 쓰고
   GitHub PAT 는 저장소를 받는 데만 메모리로 쓴 뒤 지웁니다. 이 PC 의 기존 Bitwarden·GitHub 로그인은 건드리지 않습니다.
 - 계정 확인은 저장된 값을 읽기만 합니다(접근 확인이 실패해도 저장된 계정을 지우지 않음).
-- 묻지 않으려면 `DT2_KEEP_ACCOUNT=y` 또는 `n` 을 지정합니다(n 은 저장된 계정이 접근되더라도 일회성 설치).
+- 묻지 않으려면 `DT2_KEEP_ACCOUNT=y` 또는 `n` 을 지정합니다(n 은 저장된 계정이 접근되더라도 일회성 설치, y 는 PAT 만료면 갱신).
+- 설치 뒤에도 저장된 PAT 가 만료되면, GitHub 로그인을 쓰는 곳(설치 Step 3·명령 팔레트 PR 체크아웃 등 `bw_setup_github_auth`)이 Bitwarden 의 새 PAT 로 갱신합니다.
 
 ## 구성
 
