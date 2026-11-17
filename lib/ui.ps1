@@ -3,7 +3,7 @@
 # ==============================================================================
 # 원본은 이 저장소(_devtools2-setup) 하나입니다.
 #   - 시작 스크립트(install.ps1): 같은 커밋의 이 파일을 받아 씀
-#   - _devtools2 의 scripts/windows/dev-env/_common.ps1: submodule(public/)의 이 파일을 불러 씀
+#   - _devtools2 의 scripts/windows/dev-env/_common.ps1: submodule(setup/)의 이 파일을 불러 씀
 # 사용법 (PS 5.1 은 NoBOM UTF-8 파일을 CP949 로 읽으므로, UTF-8 로 읽어 메모리에서 실행):
 #   . ([scriptblock]::Create([System.IO.File]::ReadAllText($path, [System.Text.UTF8Encoding]::new($false))))
 # ⚠️ 공개 저장소입니다. 회사·고객 정보, 접속 주소, 비밀값을 넣지 마십시오.

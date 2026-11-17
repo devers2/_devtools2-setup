@@ -123,6 +123,14 @@ chmod +x "$T/dt2/public/a.sh" 2>/dev/null
 git -C "$src" -c user.name=t -c user.email=t@t commit -q --allow-empty -m five
 out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/dt2'; DT2_REPO_URL='$src'; git config --global protocol.file.allow always; _sync_repo")
 check "submodule 안 권한 변화는 무시하고 최신으로 맞춤" '[ "$(git -C "$T/dt2" log -1 --format=%s)" = five ]' "$out"
+# submodule 폴더 이름이 바뀐 업데이트(_devtools2 2026-11-17: public/ → setup/)도 최신으로 맞추고 새 폴더를 채우는가
+#   (옛 public/ 폴더는 남을 수 있음 — _devtools2 의 설치 Step 0 이 정리)
+git -C "$src" -c protocol.file.allow=always submodule deinit -q -f public >/dev/null 2>&1
+git -C "$src" rm -q -f public >/dev/null 2>&1 && rm -rf "$src/.git/modules/public"
+git -C "$src" -c protocol.file.allow=always submodule add -q --name setup "$sub" setup >/dev/null 2>&1 \
+    && git -C "$src" -c user.name=t -c user.email=t@t commit -qm six
+out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/dt2'; DT2_REPO_URL='$src'; git config --global protocol.file.allow always; _sync_repo")
+check "submodule 폴더 이름이 바뀐 업데이트도 최신으로 맞추고 새 폴더를 채움" '[ "$(git -C "$T/dt2" log -1 --format=%s)" = six ] && [ -f "$T/dt2/setup/a.sh" ]' "$out"
 mkdir -p "$T/plain" && echo keep >"$T/plain/f"
 out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/plain'; DT2_REPO_URL='$src'; _sync_repo")
 check "Git 저장소가 아닌 폴더는 .bak 으로 옮기고 clone" '[ -d "$T/plain/.git" ] && ls -d "$T"/plain.bak.* >/dev/null 2>&1' "$out"

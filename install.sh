@@ -230,7 +230,7 @@ _sync_repo() {
     if [ -d "$DT2_DIR/.git" ]; then
         local _branch
         _branch=$(git -C "$DT2_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
-        # submodule(public/) 안의 작업 트리 변화(설치 Step 0 의 chmod 등)는 무시합니다 — submodule 은 아래 update 가 맞춥니다.
+        # submodule(setup/) 안의 작업 트리 변화(설치 Step 0 의 chmod 등)는 무시합니다 — submodule 은 아래 update 가 맞춥니다.
         if ! git -C "$DT2_DIR" diff --quiet --ignore-submodules=dirty 2>/dev/null \
             || ! git -C "$DT2_DIR" diff --staged --quiet --ignore-submodules=dirty 2>/dev/null; then
             print_warn "$DT2_DIR 에 커밋하지 않은 변경이 있어 최신으로 맞추지 않고 그대로 진행합니다."
