@@ -152,6 +152,19 @@ if [ "${DT2_TEST_NETWORK:-0}" = 1 ]; then
     out=$(run "bw_github_token_check fake-pat-000; echo rc=\$?")
     check "실제 GitHub API: 가짜 PAT → 401(rc=1) (네트워크)" 'grep -q "rc=1" <<<"$out"' "$out"
 fi
+echo "▶ 2-0-2. 입력한 Bitwarden 항목 이름을 이어지는 설치 단계로 넘김 (BW_GH_ITEM → BW_DEFAULT_PAT_ITEM)"
+FAKE_FIND='bw() { echo "{\"status\": \"unlocked\"}"; }; bw_ensure_session() { :; }; bw_find_item_live() { [ "$1" = my-item ] || [ "$1" = github.com-main ] || return 1; printf "tester\tt@t\tx\tpat-x\n"; }'
+out=$(run "$FAKE_FIND; bw_get_github_account my-item; echo ITEM=\$BW_GH_ITEM")
+check "항목 이름을 받아 찾으면 BW_GH_ITEM 에 기록" 'grep -q "ITEM=my-item" <<<"$out"' "$out"
+out=$(run "$FAKE_FIND; bw_get_github_account; echo ITEM=\$BW_GH_ITEM")
+check "엔터(기본값)로 찾으면 기본 항목 이름 기록" 'grep -q "ITEM=github.com-main" <<<"$out"' "$out"
+out=$(run "KEEP=y; BW_GH_ITEM=my-item; DT2_KEEP_ACCOUNT_OUT='$T/keep.out'; _hand_off_account; echo DEF=\$BW_DEFAULT_PAT_ITEM; bash -c 'echo CHILD=\$BW_DEFAULT_PAT_ITEM'")
+check "리눅스: 이어지는 설치 단계(자식 프로세스)의 기본 항목이 입력한 이름" 'grep -q "CHILD=my-item" <<<"$out"' "$out"
+check "Windows: 결과 파일 1줄 y/n, 2줄 항목 이름" '[ "$(cat "$T/keep.out")" = "$(printf "y\nmy-item")" ]' "$(cat "$T/keep.out" 2>&1)"
+out=$(run "KEEP=n; unset BW_GH_ITEM; DT2_KEEP_ACCOUNT_OUT='$T/keep.out'; _hand_off_account; echo DEF=\$BW_DEFAULT_PAT_ITEM")
+check "Bitwarden 을 열지 않았으면 기본값 그대로, 파일 2줄은 빈 줄" 'grep -q "DEF=github.com-main" <<<"$out" && [ "$(sed -n 2p "$T/keep.out")" = "" ] && [ "$(sed -n 1p "$T/keep.out")" = n ]' "$out"
+rm -f "$T/keep.out"
+
 rm -f "$T/home/.git-credentials" "$T/home/.gitconfig" "$T"/home/.git-credentials.bak.*
 out=$(run "unset DT2_KEEP_ACCOUNT; _detect_account; echo STATE=\$ACC_STATE")
 check "저장된 계정 없음 → none (기존 y/n 질문으로)" 'grep -q "STATE=none" <<<"$out"' "$out"

@@ -1274,7 +1274,11 @@ Write-Step "[저장소] GitHub 계정 확인 및 DevTools2 저장소 받기 (WSL
 wsl.exe -d $wslName --exec env "DT2_KEEP_ACCOUNT=$keepAccount" "DT2_KEEP_ACCOUNT_OUT=$keepOutFile" "DT2_SETUP_REF=$($env:DT2_SETUP_REF)" DT2_SETUP_CLONE_ONLY=1 `
     bash -c "curl -fsSL '$SETUP_RAW/install.sh' | bash"
 $syncExit = $LASTEXITCODE
-$keepResult = (wsl.exe -d $wslName --exec cat $keepOutFile 2>$null | Out-String).Trim()
+# 1줄: 계정 사용(y/n), 2줄: 입력한 Bitwarden 항목 이름(없으면 빈 줄 — 이어지는 Step 3 의 기본 항목으로 넘김)
+$keepLines = @((wsl.exe -d $wslName --exec cat $keepOutFile 2>$null | Out-String) -split "`r?`n")
+$keepResult = ([string]$keepLines[0]).Trim()
+$patItem = if ($keepLines.Count -gt 1) { ([string]$keepLines[1]).Trim() } else { '' }
+if ($patItem) { $env:BW_DEFAULT_PAT_ITEM = $patItem }
 wsl.exe -d $wslName --exec rm -f $keepOutFile 2>$null | Out-Null
 if ($syncExit -eq 130) {
     Write-Info "설치를 중단했습니다."

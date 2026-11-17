@@ -24,7 +24,7 @@
 #   DT2_KEEP_ACCOUNT=y|n      계정 사용 질문의 답
 #   BW_DEFAULT_PAT_ITEM=이름  GitHub PAT 가 든 Bitwarden 항목 (기본 github.com-main, 사용자 지정 필드 "PAT")
 #   DT2_SETUP_REF=브랜치      이 저장소의 다른 브랜치·커밋으로 시험할 때 (기본 main)
-#   DT2_KEEP_ACCOUNT_OUT=파일 정한 계정 사용(y/n)을 이 파일에 씀 (Windows install.ps1 이 씀)
+#   DT2_KEEP_ACCOUNT_OUT=파일 정한 계정 사용(y/n)과 입력한 Bitwarden 항목 이름을 이 파일에 씀 (Windows install.ps1 이 씀)
 #   DT2_SETUP_CLONE_ONLY=1    저장소 준비까지만 하고 끝냄 (Windows install.ps1 이 씀 — 리눅스 설치 단계는
 #                             Windows 쪽 설치 스크립트가 임시 sudo 와 함께 순서대로 실행)
 #
@@ -361,6 +361,18 @@ _sync_repo() {
     print_done "$DT2_DIR 에 받았습니다: $(git -C "$DT2_DIR" rev-parse --short HEAD)"
 }
 
+# ── 이어지는 설치 단계에 계정 결정 넘기기 (리눅스: 환경 변수, Windows: DT2_KEEP_ACCOUNT_OUT 파일) ──
+_hand_off_account() {
+    # 여기서 입력한 Bitwarden 항목 이름을 이어지는 설치 단계(Step 3 GitHub 로그인 연결)의 기본값으로 넘김
+    #   (기본값이 아닌 항목을 썼으면 "Bitwarden 의 PAT 로 변경하시겠습니까? (항목)" 에도 그 이름이 보이도록)
+    [ -n "${BW_GH_ITEM:-}" ] && export BW_DEFAULT_PAT_ITEM="$BW_GH_ITEM"
+    # Windows install.ps1 이 이어지는 설치 단계에 넘기도록 결정(1줄: y/n)과 항목 이름(2줄, 없으면 빈 줄)을 파일로 돌려줌
+    if [ -n "${DT2_KEEP_ACCOUNT_OUT:-}" ]; then
+        printf '%s\n%s\n' "$KEEP" "${BW_GH_ITEM:-}" >"$DT2_KEEP_ACCOUNT_OUT" 2>/dev/null || print_warn "계정 사용 결정을 기록하지 못했습니다: $DT2_KEEP_ACCOUNT_OUT"
+    fi
+    return 0
+}
+
 main() {
     # curl … | bash 로 실행하면 표준 입력이 이 스크립트라 질문에 답할 수 없으므로, 터미널이 있으면 입력을 터미널로 돌림
     # (스크립트 전체가 main 함수 안에 있고 마지막 줄에서 부르므로, bash 가 남은 줄을 터미널에서 읽는 일은 없음)
@@ -391,10 +403,7 @@ main() {
     [ -f "$_setup" ] || _die "$_setup 이 없습니다."
     _cleanup
     trap - EXIT INT TERM HUP
-    # Windows install.ps1 이 이어지는 설치 단계에 넘기도록 결정(y/n)을 파일로 돌려줌
-    if [ -n "${DT2_KEEP_ACCOUNT_OUT:-}" ]; then
-        printf '%s\n' "$KEEP" >"$DT2_KEEP_ACCOUNT_OUT" 2>/dev/null || print_warn "계정 사용 결정을 기록하지 못했습니다: $DT2_KEEP_ACCOUNT_OUT"
-    fi
+    _hand_off_account
     if [ "${DT2_SETUP_CLONE_ONLY:-0}" = 1 ]; then
         print_done "DevTools2 저장소 준비를 마쳤습니다 (DT2_SETUP_CLONE_ONLY=1 — 설치 단계는 실행하지 않음)."
         return 0

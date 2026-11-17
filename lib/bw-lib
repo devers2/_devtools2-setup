@@ -954,7 +954,7 @@ bw_interactive_login() {
 # - 시작 스크립트의 일회성 설치는 이 값으로 clone 만 하고 아무 데도 저장하지 않습니다.
 bw_get_github_account() {
     local _item_arg="${1:-}" _item="${1:-$BW_DEFAULT_PAT_ITEM}"
-    BW_GH_USER="" BW_GH_EMAIL="" BW_GH_PAT=""
+    BW_GH_USER="" BW_GH_EMAIL="" BW_GH_PAT="" BW_GH_ITEM=""
 
     if ! command -v bw >/dev/null 2>&1; then
         echo "❌ Bitwarden CLI(bw)를 찾을 수 없어 GitHub 로그인을 자동 설정할 수 없습니다." >&2
@@ -996,7 +996,8 @@ bw_get_github_account() {
     _user=$(printf "%s" "$_parsed" | cut -f1 | tr -d '@')
     _email=$(printf "%s" "$_parsed" | cut -f2)
     echo "✅ GitHub 계정 확인: $_user ($_email)"
-    BW_GH_USER="$_user" BW_GH_EMAIL="$_email" BW_GH_PAT="$_pat"
+    # BW_GH_ITEM: 실제로 찾은 항목 이름 — install.sh 가 이후 설치 단계의 기본 항목(BW_DEFAULT_PAT_ITEM)으로 넘김
+    BW_GH_USER="$_user" BW_GH_EMAIL="$_email" BW_GH_PAT="$_pat" BW_GH_ITEM="$_item"
     return 0
 }
 
