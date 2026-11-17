@@ -10,6 +10,8 @@
 #   4) 그 안의 scripts/linux/setup-devtools2.sh 실행
 #
 # 계정 사용 (DT2_KEEP_ACCOUNT=y|n 로 묻지 않고 지정)
+#   (지정하지 않으면) 이 PC 에 저장된 GitHub 계정이 DevTools2 저장소에 접근되면 묻지 않고 그대로 씁니다.
+#      계정은 있는데 접근이 안 되면(남의 계정·PAT 만료) 일회성 설치 또는 중단을, 계정이 없으면 y/n 을 묻습니다.
 #   y: 이 PC 에 Bitwarden 로그인과 GitHub 계정 정보(git 자격 증명·gh 로그인)를 저장합니다.
 #      이미 git 자격 증명이 있으면 Bitwarden 없이 그대로 씁니다(다시 실행해 업데이트할 때).
 #   n: 일회성 설치 — bw 는 임시 데이터 폴더(BITWARDENCLI_APPDATA_DIR)에서만 쓰고, PAT 는 clone·fetch 에만
@@ -21,6 +23,7 @@
 #   DT2_KEEP_ACCOUNT=y|n      계정 사용 질문의 답
 #   BW_DEFAULT_PAT_ITEM=이름  GitHub PAT 가 든 Bitwarden 항목 (기본 github.com-main, 사용자 지정 필드 "PAT")
 #   DT2_SETUP_REF=브랜치      이 저장소의 다른 브랜치·커밋으로 시험할 때 (기본 main)
+#   DT2_KEEP_ACCOUNT_OUT=파일 정한 계정 사용(y/n)을 이 파일에 씀 (Windows install.ps1 이 씀)
 #   DT2_SETUP_CLONE_ONLY=1    저장소 준비까지만 하고 끝냄 (Windows install.ps1 이 씀 — 리눅스 설치 단계는
 #                             Windows 쪽 설치 스크립트가 임시 sudo 와 함께 순서대로 실행)
 #
@@ -113,16 +116,76 @@ _sudo() {
 }
 
 # ── 계정 사용 질문 ───────────────────────────────────────────────────────────
+# ── 이 PC 에 저장된 GitHub 계정 확인 ─────────────────────────────────────────
+# ACC_STATE: none(저장된 계정 없음) / ok(DevTools2 저장소에 접근됨) / noaccess(계정은 있지만 접근 안 됨 — 남의 계정·PAT 만료·네트워크)
+# ACC_USER : 저장된 계정 이름(표시용)
+# ⚠️ 계정은 읽기만 합니다. 저장된 도우미로 바로 ls-remote 하면 인증 실패(401) 때 git 이 'credential reject' 를 불러
+#    store 도우미가 ~/.git-credentials 의 그 줄을 지웁니다(남의 PC 계정을 지우게 됨). 그래서 fill 로 읽은 값을
+#    메모리 전용 도우미로만 넘겨 확인합니다. GUI 로그인 창(Git Credential Manager)·터미널 질문은 띄우지 않습니다.
+ACC_STATE="" ACC_USER=""
+_detect_account() {
+    local _fill _pw
+    _fill=$(printf 'protocol=https\nhost=github.com\n\n' \
+        | GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never GIT_ASKPASS= SSH_ASKPASS= \
+            timeout 20 git -c core.askPass= credential fill 2>/dev/null) || _fill=""
+    ACC_USER=$(sed -n 's/^username=//p' <<<"$_fill" | head -n 1)
+    _pw=$(sed -n 's/^password=//p' <<<"$_fill" | head -n 1)
+    _fill=""
+    if [ -z "$ACC_USER" ] || [ -z "$_pw" ]; then
+        ACC_STATE=none ACC_USER=""
+        return 0
+    fi
+    if _check_repo_access "$ACC_USER" "$_pw"; then ACC_STATE=ok; else ACC_STATE=noaccess; fi
+    _pw=""
+}
+
+# 계정으로 비공개 저장소를 읽을 수 있는지 (메모리 전용 도우미 — 저장·삭제 없음). 시험에서는 이 함수를 바꿔 끼웁니다.
+_check_repo_access() {
+    DT2_GH_USER="$1" DT2_GH_PAT="$2" GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never timeout 30 git \
+        -c credential.helper= \
+        -c 'credential.helper=!f() { [ "$1" = get ] || exit 0; printf "username=%s\npassword=%s\n" "$DT2_GH_USER" "$DT2_GH_PAT"; }; f' \
+        ls-remote --heads "$DT2_REPO_URL" >/dev/null 2>&1
+}
+
+# ── 계정 사용 결정 (KEEP=y: 이 PC 의 계정 사용·없으면 저장 / n: 일회성) ──────────
+#   저장된 계정이 저장소에 접근되면 묻지 않고 그대로 씁니다(아무것도 바꾸지 않음).
+#   계정은 있는데 접근이 안 되면 일회성 설치 또는 중단만 고릅니다(이 PC 의 계정은 건드리지 않음).
+#   저장된 계정이 없으면 저장할지(y) 일회성(n)인지 묻습니다.
 _ask_keep_account() {
+    local _ans=""
+    _detect_account
     case "${DT2_KEEP_ACCOUNT:-}" in
-        [Yy]*) KEEP=y; return 0 ;;
+        [Yy]*)
+            [ "$ACC_STATE" = noaccess ] && _die "저장된 GitHub 계정(${ACC_USER})으로 DevTools2 저장소에 접근할 수 없습니다. DT2_KEEP_ACCOUNT=n(일회성)으로 실행하세요."
+            [ "$ACC_STATE" = ok ] && print_done "저장된 GitHub 계정(${ACC_USER})으로 진행합니다 — DevTools2 저장소 접근 확인됨."
+            KEEP=y; return 0 ;;
         [Nn]*) KEEP=n; return 0 ;;
         "") ;;
         *) _die "DT2_KEEP_ACCOUNT 는 y 또는 n 입니다: ${DT2_KEEP_ACCOUNT}" ;;
     esac
+    if [ "$ACC_STATE" = ok ]; then
+        echo ""
+        print_done "이 PC 에 저장된 GitHub 계정(${ACC_USER})이 있고 DevTools2 저장소에 접근할 수 있습니다."
+        print_info "이 계정으로 그대로 진행합니다 (계정 설정은 바꾸지 않음). 일회성 설치를 원하면 중단 후 DT2_KEEP_ACCOUNT=n 으로 다시 실행하세요."
+        KEEP=y; return 0
+    fi
     dt2_is_noninteractive && _die "질문할 터미널이 없습니다. DT2_KEEP_ACCOUNT=y 또는 n 으로 지정하세요."
-    local _ans=""
     echo ""
+    if [ "$ACC_STATE" = noaccess ]; then
+        printf '%s\n' "${_C_YELLOW}${_C_BOLD}👉 이 PC 에 저장된 GitHub 계정(${ACC_USER})으로는 DevTools2 저장소에 접근할 수 없습니다.${_C_RESET}"
+        echo "   (다른 사람의 계정이거나, PAT 가 만료되었거나, 네트워크 문제일 수 있습니다)"
+        echo "   1) 일회성 설치 — Bitwarden 에 로그인해 설치에만 쓰고, 끝나면 지웁니다. 이 PC 의 계정은 그대로 둡니다."
+        echo "   2) 중단"
+        while true; do
+            prompt_read _ans "   선택 [1/2]:"
+            case "${_ans//[[:space:]]/}" in
+                1) KEEP=n; return 0 ;;
+                2) print_info "설치를 중단했습니다. 내 PC 라면 만료된 계정을 지운 뒤(~/.git-credentials 의 github.com 줄) 다시 실행하세요."
+                   exit 130 ;;
+            esac
+            print_warn "1 또는 2 를 입력해 주세요."
+        done
+    fi
     printf '%s\n' "${_C_YELLOW}${_C_BOLD}👉 설치에 사용할 Bitwarden/GitHub 계정을 현재 PC 에서 사용하시겠습니까? [y/n]${_C_RESET}"
     echo "   y: 이 PC 에 Bitwarden 로그인과 GitHub 계정 정보(PAT·gh 로그인)를 저장합니다."
     echo "   n: 일회성 설치 — 설치에만 사용하고, 끝나면 이 PC 에 계정 정보를 남기지 않습니다."
@@ -189,10 +252,8 @@ PY
 # ── GitHub 계정 준비 ─────────────────────────────────────────────────────────
 _prepare_account() {
     if [ "$KEEP" = y ]; then
-        if bw_git_credentials_exist github.com; then
-            print_info "저장된 GitHub 로그인(~/.git-credentials)을 씁니다."
-            return 0
-        fi
+        # 저장된 계정이 있으면(_detect_account) 그대로 씁니다 — 접근이 안 되는 계정이면 _ask_keep_account 에서 이미 걸러짐
+        [ "$ACC_STATE" = ok ] && return 0
         _prepare_bw
         bw_setup_github_auth || _die "GitHub 로그인 설정에 실패했습니다."
         return 0
@@ -291,6 +352,10 @@ main() {
     [ -f "$_setup" ] || _die "$_setup 이 없습니다."
     _cleanup
     trap - EXIT INT TERM HUP
+    # Windows install.ps1 이 이어지는 설치 단계에 넘기도록 결정(y/n)을 파일로 돌려줌
+    if [ -n "${DT2_KEEP_ACCOUNT_OUT:-}" ]; then
+        printf '%s\n' "$KEEP" >"$DT2_KEEP_ACCOUNT_OUT" 2>/dev/null || print_warn "계정 사용 결정을 기록하지 못했습니다: $DT2_KEEP_ACCOUNT_OUT"
+    fi
     if [ "${DT2_SETUP_CLONE_ONLY:-0}" = 1 ]; then
         print_done "DevTools2 저장소 준비를 마쳤습니다 (DT2_SETUP_CLONE_ONLY=1 — 설치 단계는 실행하지 않음)."
         return 0

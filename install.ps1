@@ -10,7 +10,8 @@
 #   5) clone 한 저장소의 Windows 설치 스크립트(scripts/windows/setup-devtools2-wsl.ps1)를 실행
 # 다시 실행하면 이미 된 단계는 건너뛰고 저장소를 최신으로 맞춘 뒤 설치를 이어 갑니다(업데이트).
 #
-# 계정 사용 (DT2_KEEP_ACCOUNT=y|n 로 묻지 않고 지정): install.sh 와 같음
+# 계정 사용: WSL 안 install.sh 가 정합니다 — 저장된 계정이 저장소에 접근되면 묻지 않고 그대로,
+#   접근이 안 되면 일회성/중단, 계정이 없으면 y/n 을 묻습니다. DT2_KEEP_ACCOUNT=y|n 로 묻지 않고 지정:
 #   y: 이 PC 에 Bitwarden 로그인과 GitHub 계정 정보(PAT·gh 로그인)를 저장합니다.
 #   n: 일회성 설치 — 설치에만 사용하고, 끝나면 이 PC 에 계정 정보를 남기지 않습니다.
 #
@@ -1256,31 +1257,42 @@ Write-Host ""
 }
 
 # ==============================================================================
-# 계정 사용 질문 → 배포판 안에서 install.sh (Bitwarden 로그인 → _devtools2 clone)
+# 계정 사용 결정 → 배포판 안에서 install.sh (Bitwarden 로그인 → _devtools2 clone)
 # ==============================================================================
-# 기본값 없음: Enter 만 누르면 다시 묻습니다. 한글 입력 상태의 y·n 키(ㅛ·ㅜ)도 받습니다(Read-Dt2YesNo — lib/ui.ps1).
+# 계정은 WSL 안에 저장되므로 결정도 install.sh 가 합니다(저장된 계정이 저장소에 접근되면 묻지 않고 그대로,
+# 접근이 안 되면 일회성/중단, 계정이 없으면 y/n). 정한 값(y/n)은 파일로 돌려받아 이어지는 설치 단계에 넘깁니다.
+# DT2_KEEP_ACCOUNT=y|n 을 지정했으면 그대로 넘깁니다(묻지 않음).
 $keepAccount = ''
 if ($env:DT2_KEEP_ACCOUNT -match '^[YyNn]') {
     $keepAccount = $env:DT2_KEEP_ACCOUNT.Substring(0, 1).ToLower()
-} else {
-    Write-Host ""
-    Write-Host "👉 설치에 사용할 Bitwarden/GitHub 계정을 현재 PC 에서 사용하시겠습니까? [y/n]" -ForegroundColor Yellow
-    Write-Host "   y: 이 PC 에 Bitwarden 로그인과 GitHub 계정 정보(PAT·gh 로그인)를 저장합니다."
-    Write-Host "   n: 일회성 설치 — 설치에만 사용하고, 끝나면 이 PC 에 계정 정보를 남기지 않습니다."
-    $keepAccount = if (Read-Dt2YesNo '   선택 [y/n]') { 'y' } else { 'n' }
 }
-$env:DT2_KEEP_ACCOUNT = $keepAccount
+$keepOutFile = "/tmp/dt2-keep-account.$PID.$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
 
-Write-Step "[저장소] Bitwarden 로그인 및 DevTools2 저장소 받기 (WSL 안 install.sh)"
+Write-Step "[저장소] GitHub 계정 확인 및 DevTools2 저장소 받기 (WSL 안 install.sh)"
 # --exec: 셸을 거치지 않고 인자를 그대로 넘깁니다. install.sh 는 clone(또는 최신으로 맞추기)까지만 하고 끝냅니다
 # (그 뒤 리눅스 설치 단계는 아래 Windows 설치 스크립트가 임시 sudo 와 함께 순서대로 실행).
-wsl.exe -d $wslName --exec env "DT2_KEEP_ACCOUNT=$keepAccount" "DT2_SETUP_REF=$($env:DT2_SETUP_REF)" DT2_SETUP_CLONE_ONLY=1 `
+wsl.exe -d $wslName --exec env "DT2_KEEP_ACCOUNT=$keepAccount" "DT2_KEEP_ACCOUNT_OUT=$keepOutFile" "DT2_SETUP_REF=$($env:DT2_SETUP_REF)" DT2_SETUP_CLONE_ONLY=1 `
     bash -c "curl -fsSL '$SETUP_RAW/install.sh' | bash"
-if ($LASTEXITCODE -ne 0) {
-    Write-Fail "DevTools2 저장소를 준비하지 못했습니다 (종료 코드 $LASTEXITCODE)."
+$syncExit = $LASTEXITCODE
+$keepResult = (wsl.exe -d $wslName --exec cat $keepOutFile 2>$null | Out-String).Trim()
+wsl.exe -d $wslName --exec rm -f $keepOutFile 2>$null | Out-Null
+if ($syncExit -eq 130) {
+    Write-Info "설치를 중단했습니다."
     Pause-Script
     Exit-Devtools2Setup 1
 }
+if ($syncExit -ne 0) {
+    Write-Fail "DevTools2 저장소를 준비하지 못했습니다 (종료 코드 $syncExit)."
+    Pause-Script
+    Exit-Devtools2Setup 1
+}
+if ($keepResult -match '^[yn]$') { $keepAccount = $keepResult }
+if (-not $keepAccount) {
+    # 결정을 돌려받지 못하면 계정을 저장하지 않는 쪽(일회성)으로 이어 갑니다
+    Write-Warn "계정 사용 결정을 확인하지 못해 일회성 설치로 이어 갑니다 (설치 단계의 GitHub 로그인 저장을 건너뜀)."
+    $keepAccount = 'n'
+}
+$env:DT2_KEEP_ACCOUNT = $keepAccount
 
 # ==============================================================================
 # clone 한 저장소의 Windows 설치 스크립트 실행

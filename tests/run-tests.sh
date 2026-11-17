@@ -78,6 +78,30 @@ check "잘못된 값 → 거부" 'grep -q "y 또는 n" <<<"$out" && ! grep -q "K
 out=$(run "unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
 check "터미널 없음·값 없음 → 거부 (기본값 없음)" 'grep -q "DT2_KEEP_ACCOUNT=y 또는 n" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
 
+echo "▶ 2-0. 저장된 계정 확인 (_detect_account — 접근되면 묻지 않음, 안 되면 일회성/중단)"
+git config --file "$T/home/.gitconfig" credential.helper store
+printf 'https://tester:fake-pat-000@github.com\n' >"$T/home/.git-credentials"
+cred_md5=$(md5sum <"$T/home/.git-credentials")
+out=$(run "_check_repo_access() { return 0; }; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP STATE=\$ACC_STATE")
+check "접근되는 계정 → 묻지 않고 그대로(y), 계정 이름과 진행 안내 표시" 'grep -q "KEEP=y STATE=ok" <<<"$out" && grep -q "(tester)" <<<"$out" && grep -q "그대로 진행" <<<"$out" && ! grep -q "선택" <<<"$out"' "$out"
+out=$(run "_check_repo_access() { return 1; }; unset DT2_KEEP_ACCOUNT; _ask_keep_account; echo KEEP=\$KEEP")
+check "접근 안 되는 계정·터미널 없음 → 진행하지 않음" '! grep -q "KEEP=" <<<"$out"' "$out"
+out=$(run "_check_repo_access() { return 1; }; DT2_KEEP_ACCOUNT=y; _ask_keep_account; echo KEEP=\$KEEP")
+check "접근 안 되는 계정 + DT2_KEEP_ACCOUNT=y → 거부하고 일회성 안내" 'grep -q "DT2_KEEP_ACCOUNT=n" <<<"$out" && ! grep -q "KEEP=" <<<"$out"' "$out"
+out=$(run "_check_repo_access() { return 1; }; DT2_KEEP_ACCOUNT=n; _ask_keep_account; echo KEEP=\$KEEP")
+check "접근 안 되는 계정 + DT2_KEEP_ACCOUNT=n → 일회성" 'grep -q "KEEP=n" <<<"$out"' "$out"
+if [ "${DT2_TEST_NETWORK:-0}" = 1 ]; then
+    # 실제 GitHub: 가짜 PAT 는 401 → 저장된 도우미를 썼다면 git 이 reject 로 이 줄을 지웠을 것
+    out=$(run "_detect_account; echo STATE=\$ACC_STATE USER=\$ACC_USER")
+    check "실제 접근 실패(가짜 PAT)도 noaccess 로 판단하고 ~/.git-credentials 를 바꾸지 않음 (네트워크)" 'grep -q "STATE=noaccess USER=tester" <<<"$out" && [ "$(md5sum <"$T/home/.git-credentials")" = "$cred_md5" ]' "$out"
+else
+    echo "  SKIP  실제 GitHub 접근 실패 시 자격 증명 보존 (DT2_TEST_NETWORK=1)"
+fi
+check "확인 중 ~/.git-credentials 를 바꾸지 않음" '[ "$(md5sum <"$T/home/.git-credentials")" = "$cred_md5" ]'
+rm -f "$T/home/.git-credentials" "$T/home/.gitconfig"
+out=$(run "unset DT2_KEEP_ACCOUNT; _detect_account; echo STATE=\$ACC_STATE")
+check "저장된 계정 없음 → none (기존 y/n 질문으로)" 'grep -q "STATE=none" <<<"$out"' "$out"
+
 echo "▶ 2-1. 입력값 정리 (dt2_clean_input — prompt_read 가 모든 입력에 적용)"
 clean() { LANG=C.UTF-8 LC_ALL=C.UTF-8 bash -c 'source "$1"; v="$2"; dt2_clean_input v; printf "%s" "$v"' _ "$ROOT/lib/ui-lib" "$1"; }
 check "앞뒤 공백·전각 공백 자름, 가운데 공백은 유지" '[ "$(clean $'"'"'\xe3\x80\x80 a b  '"'"')" = "a b" ]'
