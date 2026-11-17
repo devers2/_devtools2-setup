@@ -925,7 +925,6 @@ bw_interactive_login() {
     # 3) 2단계 인증 / 새 기기 확인 코드 (bw 가 직접 묻도록 대화형 실행)
     if [ "$_status" = "code" ]; then
         echo "🔢 2단계 인증 또는 새 기기 확인 코드가 필요합니다."
-        echo "   (메일로 받는 코드는 시도할 때마다 새로 발송되니 가장 최근 메일의 코드를 입력하세요)"
         for _try in 1 2 3; do
             _out=$(BW_PASSWORD="$_pw" bw login "$_email" --passwordenv BW_PASSWORD --raw </dev/tty) && { _status="ok"; break; }
             _status="code_fail"
