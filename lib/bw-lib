@@ -1048,7 +1048,7 @@ bw_setup_github_auth() {
             else
                 echo "ℹ️  이 PC 에 GitHub PAT 가 저장되어 있습니다: ${BW_STORED_GH_USER} (GitHub 에 연결할 수 없어 유효한지 확인하지 못함)"
             fi
-            if prompt_confirm "   🔄 Bitwarden 의 PAT 로 변경하시겠습니까?" "N"; then
+            if prompt_confirm "   🔄 Bitwarden 의 PAT 로 변경하시겠습니까? (${_item_arg:-$BW_DEFAULT_PAT_ITEM})" "N"; then
                 _replace=replace
             else
                 # 저장된 PAT 로 gh 만 로그인 (이미 로그인돼 있으면 bw_setup_gh_auth 가 건너뜀)
