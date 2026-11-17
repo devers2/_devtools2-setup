@@ -266,12 +266,29 @@ prompt_password() {
 # 가려지거나 엉켜서 설치가 멈춘 것처럼 보입니다. 설치 초반에는 임시 passwordless sudo 가 있어 묻지 않지만,
 # 그 권한이 회수된 뒤(Sublime Merge·Orca·VS Code 단계 등)에는 비밀번호를 묻습니다.
 # 그래서 백그라운드 sudo 앞에서 이 함수로 인증을 먼저 받아 둡니다(이미 인증됐거나 root 면 아무것도 묻지 않음).
+# 비밀번호를 물을 때는 어느 계정의 비밀번호인지 먼저 알립니다 — sudo 기본 문구("[sudo: authenticate] Password:")만으로는
+# 바로 앞 단계에서 다룬 Bitwarden·GitHub·Windows 비밀번호와 헷갈리기 쉽습니다. sudo 비밀번호가 필요한 곳은 모두 이 함수를 거칩니다.
+# 사용법: dt2_sudo_auth [이유]   (이유를 주면 "<이유> sudo 권한이 필요합니다" 로 함께 표시)
 # 반환: 0 = sudo 를 쓸 수 있음 / 1 = sudo 없음·인증 실패
 dt2_sudo_auth() {
     [ "$(id -u)" -eq 0 ] && return 0
     command -v sudo >/dev/null 2>&1 || return 1
     sudo -n true 2>/dev/null && return 0   # 이미 인증됨 또는 passwordless
     normalize_tty
-    sudo -v
+    local _user _reason="${1:+$1 }"
+    _user="$(id -un 2>/dev/null || echo "${USER:-}")"
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        print_info "${_reason}sudo 권한이 필요합니다. WSL 계정 '${_user}' 의 비밀번호를 입력하세요."
+        print_info "  (WSL 배포판을 만들 때 정한 비밀번호 — Windows·Bitwarden·GitHub 비밀번호가 아닙니다)"
+    else
+        print_info "${_reason}sudo 권한이 필요합니다. 리눅스 계정 '${_user}' 의 로그인 비밀번호를 입력하세요."
+    fi
+    # 비밀번호 줄에도 계정 이름을 넣습니다. sudo-rs(Ubuntu 25.10~ 기본)는 -p 문구를 "[sudo: <문구>] 비밀번호:" 로 감싸므로
+    # 계정 이름만 넘기고, 기존 sudo 는 문구를 그대로 쓰므로 전체 문구를 넘깁니다(이름의 % 는 확장 문자라 %% 로).
+    if sudo --version 2>/dev/null | grep -q 'sudo-rs'; then
+        sudo -v -p "${_user} 계정"
+    else
+        sudo -v -p "[sudo] ${_user//%/%%} 계정 비밀번호: "
+    fi
 }
 

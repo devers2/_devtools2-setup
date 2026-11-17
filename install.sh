@@ -121,7 +121,16 @@ _need_commands() {
         || _die "${_missing[*]} 설치에 실패했습니다."
 }
 _sudo() {
-    if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi
+    [ "$(id -u)" -eq 0 ] && { "$@"; return; }
+    # 비밀번호를 물을 때 어느 계정의 것인지 알리도록 공용 dt2_sudo_auth 를 거칩니다.
+    # 라이브러리를 받기 전(git 설치)에는 그 함수가 없어 같은 뜻의 안내만 직접 출력합니다.
+    if declare -F dt2_sudo_auth >/dev/null; then
+        dt2_sudo_auth || return 1
+    elif ! sudo -n true 2>/dev/null; then
+        echo "[정보] sudo 권한이 필요합니다. 계정 '$(id -un)' 의 비밀번호를 입력하세요 (WSL 이면 배포판을 만들 때 정한 비밀번호)."
+        sudo -v || return 1
+    fi
+    sudo "$@"
 }
 
 # ── 계정 사용 질문 ───────────────────────────────────────────────────────────
@@ -364,7 +373,7 @@ _sync_repo() {
         return 0
     fi
     if [ "$(id -u)" -ne 0 ]; then
-        dt2_sudo_auth || _die "$DT2_DIR 을 만들려면 sudo 권한이 필요합니다."
+        dt2_sudo_auth "$DT2_DIR 을 만들려면" || _die "$DT2_DIR 을 만들려면 sudo 권한이 필요합니다."
     fi
     if [ -e "$DT2_DIR" ] && [ -n "$(ls -A "$DT2_DIR" 2>/dev/null)" ]; then
         local _bak
