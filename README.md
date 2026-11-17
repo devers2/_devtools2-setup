@@ -40,7 +40,9 @@ curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/insta
   GitHub PAT 는 저장소를 받는 데만 메모리로 쓴 뒤 지웁니다. 이 PC 의 기존 Bitwarden·GitHub 로그인은 건드리지 않습니다.
 - 계정 확인은 저장된 값을 읽기만 합니다(접근 확인이 실패해도 저장된 계정을 지우지 않음).
 - 묻지 않으려면 `DT2_KEEP_ACCOUNT=y` 또는 `n` 을 지정합니다(n 은 저장된 계정이 접근되더라도 일회성 설치, y 는 PAT 만료면 갱신).
-- 설치 뒤에도 저장된 PAT 가 만료되면, GitHub 로그인을 쓰는 곳(설치 Step 3·명령 팔레트 PR 체크아웃 등 `bw_setup_github_auth`)이 Bitwarden 의 새 PAT 로 갱신합니다.
+- 설치 Step 3 의 GitHub 로그인 연결(`bw_setup_github_auth` — 명령 팔레트 PR 체크아웃 등도 같음)은 PAT 가 이미 저장되어 있으면
+  계정과 유효 여부를 보여 주고 `Bitwarden 의 PAT 로 변경하시겠습니까? [y/N]` 만 묻습니다. N 이면 Bitwarden 없이 저장된 PAT 로 gh 만 로그인하고,
+  PAT 가 만료됐으면 묻지 않고 Bitwarden 의 새 PAT 로 갱신합니다.
 
 ## 구성
 

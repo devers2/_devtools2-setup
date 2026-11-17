@@ -825,10 +825,11 @@ bw_gh_auth_ok() {
 # ⚠️ WSL·서버에는 OS 키링이 없어 gh 가 토큰을 ~/.config/gh/hosts.yml 에 평문 저장하므로 소유자 전용(700/600)으로 맞춥니다.
 # ⚠️ gh 가 git 자격 증명 도우미를 바꾸지 않도록 'gh auth setup-git' 은 실행하지 않습니다(~/.git-credentials 를 그대로 사용).
 bw_setup_gh_auth() {
+    # $3 = replace: 이미 로그인돼 있어도 이 PAT 로 다시 로그인(PAT 변경·갱신)
     local _pat="${1:-}" _host="${2:-github.com}"
     [ -n "$_pat" ] || return 0
     command -v gh >/dev/null 2>&1 || return 0
-    if gh auth status --hostname "$_host" >/dev/null 2>&1; then
+    if [ "${3:-}" != replace ] && gh auth status --hostname "$_host" >/dev/null 2>&1; then
         echo "ℹ️  GitHub CLI(gh) 가 이미 로그인되어 있습니다. (host: $_host)"
         return 0
     fi
@@ -1026,23 +1027,37 @@ bw_confirm_github_renewal() {
 bw_setup_github_auth() {
     local _item_arg="${1:-}" _host="github.com"
 
-    # 이미 로그인되어 있으면 Bitwarden 잠금 해제(마스터 비밀번호 입력) 없이 끝냅니다.
-    # 단, 저장된 PAT 가 만료·폐기(GitHub 401)됐으면 Bitwarden 의 새 PAT 로 갱신합니다(예전에는 줄이 있기만 하면 끝나
-    # 만료된 PAT 를 바꿀 방법이 없었음). 네트워크 등으로 확인할 수 없으면 예전처럼 있는 것으로 봅니다.
+    # 이 PC 에 PAT 가 이미 저장되어 있으면 Bitwarden 을 열기 전에 계정과 유효 여부를 보여 줍니다.
+    #   ● 유효(또는 네트워크로 확인 불가): "변경하시겠습니까? [y/N]" — N 이면 Bitwarden 없이 저장된 PAT 로 gh 만 로그인
+    #     (예전에는 gh 가 로그인 전이면 Bitwarden 잠금 해제·항목 조회까지 한 뒤에야 "동일한 PAT 가 이미 저장"이 나왔음)
+    #   ● 만료·폐기(GitHub 401): 묻지 않고 Bitwarden 의 새 PAT 로 갱신(예전에는 줄이 있기만 하면 끝나 바꿀 방법이 없었음)
     local _replace=""
     if bw_git_credentials_exist "$_host"; then
-        local _tc=0
+        local _tc=0 _login="" _stored_pat=""
         if bw_read_stored_github_credential "$_host"; then
-            bw_github_token_check "$BW_STORED_GH_PAT" >/dev/null || _tc=$?
+            _stored_pat="$BW_STORED_GH_PAT"
+            _login=$(bw_github_token_check "$_stored_pat") || _tc=$?
         fi
         BW_STORED_GH_PAT=""
         if [ "$_tc" -eq 1 ]; then
             echo "⚠️  저장된 GitHub PAT(${BW_STORED_GH_USER})가 만료되었거나 폐기되었습니다. Bitwarden 의 새 PAT 로 갱신합니다."
             _replace=replace
-        elif bw_gh_auth_ok "$_host"; then
-            echo "ℹ️  GitHub 로그인이 이미 설정되어 있습니다. (git 자격 증명$(command -v gh >/dev/null 2>&1 && echo ' + gh CLI'))"
-            return 0
+        else
+            if [ "$_tc" -eq 0 ]; then
+                echo "ℹ️  이 PC 에 GitHub PAT 가 저장되어 있습니다: 계정 ${_login:-$BW_STORED_GH_USER} (유효)"
+            else
+                echo "ℹ️  이 PC 에 GitHub PAT 가 저장되어 있습니다: ${BW_STORED_GH_USER} (GitHub 에 연결할 수 없어 유효한지 확인하지 못함)"
+            fi
+            if prompt_confirm "   🔄 Bitwarden 의 PAT 로 변경하시겠습니까?" "N"; then
+                _replace=replace
+            else
+                # 저장된 PAT 로 gh 만 로그인 (이미 로그인돼 있으면 bw_setup_gh_auth 가 건너뜀)
+                bw_setup_gh_auth "$_stored_pat" "$_host"
+                _stored_pat=""
+                return 0
+            fi
         fi
+        _stored_pat=""
     fi
 
     bw_get_github_account "$_item_arg" || return 1
@@ -1058,7 +1073,8 @@ bw_setup_github_auth() {
     if [ -z "$(git config --global --get credential.helper 2>/dev/null)" ]; then
         git config --global credential.helper store
     fi
-    bw_setup_gh_auth "$_pat" "$_host"
+    # PAT 를 바꿨으면 gh 도 새 PAT 로 다시 로그인(이미 로그인돼 있어도)
+    bw_setup_gh_auth "$_pat" "$_host" "$_replace"
     return 0
 }
 

@@ -133,8 +133,16 @@ out=$(run "$FAKE_BW; bw_github_token_check() { [ \"\$1\" = new-pat-111 ] && { ec
 check "만료 → Bitwarden 새 PAT 로 교체, 기존 파일 백업" 'grep -q "rc=0" <<<"$out" && grep -q "new-pat-111@github.com" "$T/home/.git-credentials" && ! grep -q fake-pat-000 "$T/home/.git-credentials" && grep -qs fake-pat-000 "$T"/home/.git-credentials.bak.*' "$out"
 rm -f "$T"/home/.git-credentials.bak.*
 printf 'https://tester:still-good@github.com\n' >"$T/home/.git-credentials"
-out=$(run "$FAKE_BW; bw_github_token_check() { echo tester; return 0; }; bw_gh_auth_ok() { return 0; }; bw_setup_github_auth; echo rc=\$?")
-check "유효한 PAT → 예전처럼 그대로 (Bitwarden 안 씀)" 'grep -q "이미 설정" <<<"$out" && grep -q still-good "$T/home/.git-credentials"' "$out"
+FAKE_BW2='bw_get_github_account() { echo BW-OPENED; BW_GH_USER=tester BW_GH_EMAIL=t@t BW_GH_PAT=new-pat-111; }; bw_setup_git_config() { :; }; bw_setup_gh_auth() { echo "GH-LOGIN:$1:${3:-}"; }'
+out=$(run "$FAKE_BW2; bw_github_token_check() { echo tester; return 0; }; bw_setup_github_auth; echo rc=\$?")
+check "PAT 있음(유효) → 계정 표시, 변경 기본 N → Bitwarden 없이 저장된 PAT 로 gh 만 로그인" 'grep -q "계정 tester (유효)" <<<"$out" && grep -q "변경하시겠습니까" <<<"$out" && ! grep -q BW-OPENED <<<"$out" && grep -q "GH-LOGIN:still-good:$" <<<"$out" && grep -q still-good "$T/home/.git-credentials"' "$out"
+out=$(run "$FAKE_BW2; bw_github_token_check() { return 2; }; bw_setup_github_auth; echo rc=\$?")
+check "PAT 있음(네트워크로 확인 불가) → 확인 못 했다고 표시, 기본 N 이면 그대로" 'grep -q "확인하지 못함" <<<"$out" && ! grep -q BW-OPENED <<<"$out" && grep -q still-good "$T/home/.git-credentials"' "$out"
+if command -v script >/dev/null 2>&1; then
+    out=$(printf 'y\n' | HOME="$T/home" GIT_CONFIG_NOSYSTEM=1 timeout 20 script -qec "bash -c 'source \"$ROOT/lib/ui-lib\"; source \"$ROOT/lib/bw-lib\"; $FAKE_BW2; bw_github_token_check() { echo tester; return 0; }; bw_setup_github_auth; echo rc=\$?'" /dev/null 2>&1 | tr -d '\r')
+    check "PAT 있음(유효) + 변경 y → Bitwarden 의 PAT 로 교체(백업), gh 도 다시 로그인" 'grep -q BW-OPENED <<<"$out" && grep -q "new-pat-111@github.com" "$T/home/.git-credentials" && grep -q "GH-LOGIN:new-pat-111:replace" <<<"$out" && grep -qs still-good "$T"/home/.git-credentials.bak.*' "$out"
+    rm -f "$T"/home/.git-credentials.bak.*
+fi
 printf 'https://otherperson:old-pat@github.com\n' >"$T/home/.git-credentials"
 out=$(run "$FAKE_BW; bw_github_token_check() { [ \"\$1\" = new-pat-111 ] && { echo tester; return 0; }; return 1; }; bw_setup_github_auth; echo rc=\$?")
 check "저장된 이름이 Bitwarden·GitHub 계정과 모두 다르면 묻고, 기본(N)이면 바꾸지 않음" 'grep -q "계정(otherperson)과" <<<"$out" && grep -q "rc=1" <<<"$out" && grep -q old-pat "$T/home/.git-credentials"' "$out"
