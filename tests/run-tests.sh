@@ -42,6 +42,8 @@ foreach (\$f in 'install.ps1', 'lib/ui.ps1') {
 }
 \$t = [IO.File]::ReadAllText((Join-Path \$root 'install.ps1'), [Text.UTF8Encoding]::new(\$false))
 \$a = [System.Management.Automation.Language.Parser]::ParseInput(\$t, [ref]\$null, [ref]\$null)
+# Windows 에만 있는 명령은 리눅스 pwsh(GitHub Actions ubuntu)에서 Get-Command 로 못 찾으므로 정의된 것으로 봄 (PS 5.1 은 \$IsWindows 가 없음 → Windows)
+if (\$IsWindows -eq \$false) { 'Get-CimInstance', 'Get-WindowsOptionalFeature', 'Enable-WindowsOptionalFeature', 'wsl', 'wsl.exe' | ForEach-Object { \$defs[\$_] = 1 } }
 \$a.FindAll({ \$args[0] -is [System.Management.Automation.Language.CommandAst] }, \$true) | ForEach-Object { \$_.GetCommandName() } |
     Where-Object { \$_ -and -not \$defs[\$_] -and -not (Get-Command \$_ -ErrorAction SilentlyContinue) } | Sort-Object -Unique |
     ForEach-Object { \$bad += \"정의 없는 함수: \$_\" }
