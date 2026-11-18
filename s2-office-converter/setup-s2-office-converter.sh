@@ -399,8 +399,34 @@ if [ "$(id -u)" -eq 0 ]; then
     SUDO=()
 else
     command -v sudo >/dev/null 2>&1 || fail "sudo 가 필요합니다."
-    SUDO=(sudo)
+    SUDO=(as_root)
 fi
+
+# Ask for the sudo password once, naming the account | sudo 비밀번호를 물을 때 어느 계정의 비밀번호인지 먼저 알림
+# sudo 기본 문구("[sudo: authenticate] 비밀번호:")만으로는 무슨 비밀번호인지 알기 어려우므로, 처음 물을 때 계정 이름을 함께 보여 줍니다.
+# 이미 인증됐거나 비밀번호 없는 sudo 면 아무것도 묻지 않습니다. (DevTools2 공용 dt2_sudo_auth 와 같은 문구 — 이 스크립트는 단독 실행이라 따로 둠)
+sudo_auth() {
+    sudo -n true 2>/dev/null && return 0
+    local user
+    user="$(id -un 2>/dev/null || echo "${USER:-}")"
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        info "sudo 권한이 필요합니다. WSL 계정 '${user}' 의 비밀번호를 입력하세요."
+    else
+        info "sudo 권한이 필요합니다. 리눅스 계정 '${user}' 의 로그인 비밀번호를 입력하세요."
+    fi
+    # sudo-rs(Ubuntu 25.10~ 기본)는 -p 문구를 "[sudo: <문구>] 비밀번호:" 로 감싸므로 계정 이름만 넘기고,
+    # 기존 sudo 는 문구를 그대로 쓰므로 전체 문구를 넘김 (이름의 % 는 확장 문자라 %% 로)
+    if sudo --version 2>/dev/null | grep -q 'sudo-rs'; then
+        sudo -v -p "${user} 계정"
+    else
+        sudo -v -p "[sudo] ${user//%/%%} 계정 비밀번호: "
+    fi
+}
+# root 권한으로 실행 (SUDO 배열이 가리킴)
+as_root() {
+    sudo_auth || return 1
+    sudo "$@"
+}
 
 # --export builds the image as the current user; the other modes install for the app account
 # | --export 는 지금 계정으로 이미지를 만들고, 나머지는 앱 실행 계정에 설치
@@ -445,6 +471,7 @@ run_as() {
     if [ "$(id -u)" -eq 0 ] && command -v runuser >/dev/null 2>&1; then
         runuser -u "$user" -- "$@"
     elif command -v sudo >/dev/null 2>&1; then
+        sudo_auth || return 1
         sudo -u "$user" -H "$@"
     else
         fail "다른 계정으로 실행하려면 sudo 또는 runuser 가 필요합니다."
