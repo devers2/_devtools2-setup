@@ -329,10 +329,16 @@ bash setup-s2-office-converter.sh --app-user s2conv --no-server     # 서버만 
 | 서비스 | `s2-docflow-server` (`systemctl status`, `journalctl -u s2-docflow-server`) |
 
 - Java 17 이상이 필요합니다 (없으면 apt/dnf 로 설치, 폐쇄망은 미리 설치). 폐쇄망 설치 파일은 `--export ... --server-jar <jar>` 로 jar 를 함께 담습니다.
-- 수신 주소(`--server-bind`)는 처음 설치할 때 기본 `0.0.0.0`(모든 주소)으로, 다른 서버의 앱이 접속할 수 있습니다(공유 비밀키로 인증).
-  **방화벽으로 접근을 앱 서버로 제한하십시오.** 이 서버 안의 앱만 쓰면 `--server-bind 127.0.0.1` 로 지정합니다.
+- 수신 주소(`--server-bind`)는 처음 설치할 때 기본 `127.0.0.1`(이 서버 안의 앱만)입니다. 다른 서버의 앱이 접속하려면
+  `--server-bind 0.0.0.0` 으로 지정하고(공유 비밀키로 인증) **방화벽으로 접근을 앱 서버로 제한하십시오.**
   이미 설치된 서버는 `server.env` 에 저장된 값을 그대로 쓰며, `--server-bind` 를 줄 때만 바뀝니다.
+- 서비스는 rootless Podman 이 동작하는 범위에서 강화합니다: `/usr`·`/boot`·`/etc` 읽기 전용(`ProtectSystem=full`), 다른 계정 프로세스
+  숨김(`ProtectProc=invisible`), cgroup 읽기 전용, `UMask=0027`. 쓰지 않는 것: `NoNewPrivileges` 와 이를 함께 켜는 옵션(setuid 인
+  `newuidmap` 을 막음), `ProtectHome`(홈 폴더의 이미지 저장소를 막음), `PrivateTmp`(서비스 밖에 그 계정의 Podman 기본 프로세스가 있으면
+  Podman 이 거기에 합류하는데 그곳에는 서비스 전용 `/tmp` 가 없어 변환이 실패함 — 실측).
 - 다시 실행해도 안전합니다: `--server-jar` 를 빼면 설치된 jar, 설정·비밀키는 그대로이며 바뀐 것이 있을 때만 재시작합니다.
+- 앱의 s2-docflow 버전과 서버 jar 의 버전을 맞춥니다. 요청 서명에 재전송 방지 값(`X-S2-Nonce`)이 들어간 뒤로, 그 전 버전의 앱은 새 서버에서
+  401 을 받습니다 (서버 먼저 올리면 앱을 올릴 때까지 원격 변환이 실패하므로 함께 올림).
 - `--uninstall` 은 서버 설정(공유 비밀키 포함)·캐시까지 지웁니다. 다시 설치하면 비밀키가 새로 만들어지므로 앱의 `S2_DOCFLOW_SECRET` 도 바꿔야 합니다.
 - 앱 설정·API·보안·증설: s2-docflow 의 [docs/server.ko.md](https://github.com/devers2/s2-docflow/blob/main/docs/server.ko.md)
 

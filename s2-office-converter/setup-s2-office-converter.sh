@@ -62,16 +62,16 @@
 #                      --user 도 같은 뜻으로 받습니다.
 #   --rebuild          이미지를 다시 만듭니다 (보안 업데이트 반영 등).
 #   --no-chrome        Chromium(s2-chrome)과 rhwp(s2-hwp)를 빼고 설치합니다 (이미지 약 0.7GB 작아짐).
+#                      (HTML-to-PDF 및 SVG 변환 기능이 비활성화됩니다)
 #   --server           변환 전용 서버(s2-docflow-server)를 systemd 서비스로 설치합니다. 다른 서버의 앱이 HTTP 로 변환을 맡기므로
 #                      변환 용량을 서버 대수로 늘릴 수 있습니다 (docs/server.ko.md). 공유 비밀키는 처음 설치할 때 만들어
 #                      /etc/s2-docflow/server.env 에 둡니다. --server-jar, --server-port, --server-bind, --java 로 정합니다.
-#                      수신 주소는 처음 설치할 때 기본 0.0.0.0(모든 주소)이므로 방화벽으로 접근을 앱 서버로 제한하십시오.
-#                      이 서버 안에서만 쓰면 --server-bind 127.0.0.1 로 지정합니다. 이미 설치된 서버는 저장된 값을 유지합니다.
+#                      수신 주소는 처음 설치할 때 기본 127.0.0.1(이 서버 안에서만)입니다. 다른 서버의 앱이 접속하려면
+#                      --server-bind 0.0.0.0 으로 지정하고 방화벽으로 접근을 앱 서버로 제한하십시오. 이미 설치된 서버는 저장된 값을 유지합니다.
 #   --no-server        변환 서버 서비스만 제거합니다.
 #   --font-dir 폴더    고객사 글꼴 폴더(맑은 고딕·휴먼명조 등 보유 글꼴). 이미지에 넣지 않고 변환할 때마다 읽기 전용으로 연결하므로
 #                      글꼴을 바꿔도 이미지를 다시 만들 필요가 없고, 폐쇄망 설치 파일에도 들어가지 않습니다 (글꼴 라이선스 보호).
 #                      한 번 지정하면 다시 실행해도 유지되며, --no-font-dir 로 뺍니다. 변환할 때 S2_FONT_DIR 로 바꿀 수도 있습니다.
-#                      (HTML-to-PDF 및 SVG 변환 기능이 비활성화됩니다)
 #   --uninstall        s2-soffice·s2-chrome·s2-hwp 명령과 이미지, 변환 서버와 /etc/s2-docflow(공유 비밀키 포함 설정)·캐시를
 #                      제거합니다 (Podman 자체는 남김). 다시 설치하면 비밀키가 새로 만들어지므로 앱 설정도 바꿔야 합니다.
 #   --export [파일]    폐쇄망용 설치 파일 하나를 만듭니다 (기본 ./setup-s2-office-converter-offline.sh).
@@ -166,8 +166,8 @@ usage() {
   --no-font-dir        글꼴 폴더 연결을 뺌
   --server             변환 전용 서버(s2-docflow-server)를 systemd 서비스로 설치 (다른 서버의 앱이 HTTP 로 변환을 맡김)
     --server-jar 파일    서버 jar (s2-docflow 저장소에서 ./gradlew serverJar). 다시 실행할 때는 생략하면 설치된 jar 유지
-    --server-port 포트   수신 포트 (기본 8090)        --server-bind 주소  수신 주소 (기본 0.0.0.0, 설치된 값 유지)
-                         이 서버 안에서만 쓰면 --server-bind 127.0.0.1, 외부에서 받으면 방화벽으로 접근을 앱 서버로 제한
+    --server-port 포트   수신 포트 (기본 8090)        --server-bind 주소  수신 주소 (기본 127.0.0.1, 설치된 값 유지)
+                         다른 서버의 앱이 접속하면 --server-bind 0.0.0.0 과 방화벽으로 접근을 앱 서버로 제한
     --java 경로          java 실행 파일 (기본: PATH 의 java, Java 17 이상)
   --no-server          변환 서버 서비스만 제거 (변환기는 남김)
   --dedicated          이 서버를 변환 전용으로 씀 (CPU 전체, 메모리는 OS·서버 몫 3GB를 뺀 나머지)
@@ -817,7 +817,8 @@ install_podman_online() {
     if command -v apt-get >/dev/null 2>&1; then
         "${SUDO[@]}" apt-get update -qq ||
             fail "패키지 목록을 받을 수 없습니다. 인터넷이 안 되는 서버라면 --export 로 만든 폐쇄망 설치 파일로 설치하십시오 (README.md 참고)."
-        "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq podman uidmap slirp4netns >/dev/null
+        "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq podman uidmap slirp4netns >/dev/null ||
+            fail "Podman 을 설치할 수 없습니다 (위 apt 오류 참고). 인터넷이 안 되는 서버라면 --export 로 만든 폐쇄망 설치 파일로 설치하십시오 (README.md 참고)."
     elif command -v dnf >/dev/null 2>&1; then
         "${SUDO[@]}" dnf install -y -q podman shadow-utils ||
             fail "Podman 을 설치할 수 없습니다. 인터넷이 안 되는 서버라면 --export 로 만든 폐쇄망 설치 파일로 설치하십시오 (README.md 참고)."
@@ -2298,7 +2299,7 @@ install_server() {
         cat >"$env_tmp" <<ENV
 # s2-docflow 변환 서버 설정 (setup-s2-office-converter.sh --server 가 만듦. 고친 뒤: sudo systemctl restart ${SERVER_SERVICE})
 # 설명: docs/server.ko.md (s2-docflow)
-S2_DOCFLOW_BIND=${SERVER_BIND:-0.0.0.0}
+S2_DOCFLOW_BIND=${SERVER_BIND:-127.0.0.1}
 S2_DOCFLOW_PORT=${SERVER_PORT:-8090}
 # 앱과 같은 값으로 둡니다 (앱: S2_DOCFLOW_SECRET 또는 S2RemoteConverter.builder().secret(...))
 S2_DOCFLOW_SECRET=${secret}
@@ -2353,6 +2354,21 @@ Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
 # Rootless Podman needs newuidmap (setuid), so NoNewPrivileges is not set | rootless Podman 이 setuid 인 newuidmap 을 쓰므로 NoNewPrivileges 는 두지 않음
+# Hardening that leaves rootless Podman working: options that imply NoNewPrivileges (ProtectKernel*, RestrictSUIDSGID,
+# SystemCallFilter ...) and ProtectHome (the image store is in the home folder) are left out. PrivateTmp too: Podman
+# joins the account's pause process when one runs outside the service (the setup script's checks, an admin's podman),
+# and there the service's own /tmp does not exist (measured: statfs /tmp/tmp.../in: no such file or directory, exit 125).
+# Temporary files are owner-only anyway (mktemp -d 700, Java 600)
+# | rootless Podman 이 동작하는 범위의 강화. NoNewPrivileges 를 함께 켜는 옵션(ProtectKernel*, RestrictSUIDSGID, SystemCallFilter 등)과
+# ProtectHome(이미지 저장소가 홈 폴더에 있음)은 쓰지 않음. PrivateTmp 도 쓰지 않음: 서비스 밖에 그 계정의 Podman 기본 프로세스(설치 스크립트의
+# 확인, 관리자의 podman)가 있으면 Podman 이 거기에 합류하는데 그곳에는 서비스 전용 /tmp 가 없음 (실측: statfs /tmp/tmp.../in: no such file
+# or directory, 종료 코드 125). 임시 파일은 이미 소유자 전용 (mktemp -d 700, Java 600)
+# /usr, /boot, /etc read-only; other accounts' processes hidden; cgroups read-only | /usr·/boot·/etc 읽기 전용, 다른 계정 프로세스 숨김,
+# cgroup 읽기 전용
+ProtectSystem=full
+ProtectProc=invisible
+ProtectControlGroups=true
+UMask=0027
 
 [Install]
 WantedBy=multi-user.target
@@ -2445,6 +2461,7 @@ DONE
         cat <<SERVER_DONE
    변환 서버: http://<이 서버>:$(server_env_value S2_DOCFLOW_PORT) (서비스 ${SERVER_SERVICE}, 로그: sudo journalctl -u ${SERVER_SERVICE} -f)
      앱 설정) S2_DOCFLOW_REMOTE=http://<이 서버>:$(server_env_value S2_DOCFLOW_PORT)  S2_DOCFLOW_SECRET=<sudo grep SECRET ${SERVER_ENV}>
+     앱의 s2-docflow 버전을 이 서버 jar 와 맞추십시오 (요청 서명 형식이 버전마다 다를 수 있어, 다르면 401)
 SERVER_DONE
     fi
     print_new_checksums
@@ -2658,11 +2675,13 @@ mode_offline() {
             # No --no-download: apt 2.7 then fails on local files ("Pathname to install is not absolute"). Every
             # dependency is in the file, so nothing is fetched | --no-download 를 쓰면 apt 2.7 이 로컬 파일에서 실패함. 의존성이
             # 모두 들어 있어 받을 것이 없음
-            "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${debs[@]}" >/dev/null
+            "${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${debs[@]}" >/dev/null ||
+                fail "설치 파일의 Podman 패키지를 설치하지 못했습니다 (위 apt 오류 참고). 서버 배포판에 맞게 --target 으로 설치 파일을 다시 만드십시오."
         else
             local rpms=("$dir/podman-packages/"*.rpm)
             [ ${#rpms[@]} -gt 0 ] || fail "설치 파일에 Podman 패키지가 없습니다."
-            "${SUDO[@]}" dnf install -y -q --disablerepo='*' "${rpms[@]}"
+            "${SUDO[@]}" dnf install -y -q --disablerepo='*' "${rpms[@]}" ||
+                fail "설치 파일의 Podman 패키지를 설치하지 못했습니다 (위 dnf 오류 참고). 서버 배포판에 맞게 --target 으로 설치 파일을 다시 만드십시오."
         fi
         shopt -u nullglob
         ok "Podman 설치 (설치 파일): $(podman --version)"
