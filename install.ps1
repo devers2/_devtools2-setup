@@ -202,13 +202,26 @@ function Request-RestartForWslFeatures {
 }
 
 # WSL2 엔진 고속 작동 확인 (이미 설치 및 정상 작동 중이면 0.03초 만에 즉시 통과)
+# 이 확인은 WSL 이 아직 없거나 인박스 상태인 첫 설치에서도 실행되므로, 아래 wsl --version 과 같은 이유로 타임아웃을 둡니다
+# (그런 환경에서 wsl 명령이 무한 대기할 수 있음 — 예전에는 여기서 그대로 멈출 수 있었음). 시간이 지나면 "동작 안 함"으로 보고
+# 아래 기능 점검으로 넘어갑니다.
 $wslWorking = $false
 try {
-    $null = wsl.exe --status 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    $statusProc = Start-Process wsl.exe -ArgumentList "--status" -PassThru -NoNewWindow `
+        -RedirectStandardOutput "$env:TEMP\wsl_status_check.txt" `
+        -RedirectStandardError "$env:TEMP\wsl_status_error.txt" `
+        -ErrorAction SilentlyContinue
+    if ($statusProc) { $null = $statusProc.Handle }   # PS 5.1 ExitCode $null 함정 방지(아래 wsl --version 과 같음)
+    Wait-WithSpinner -Message "WSL 동작 확인 중" -Condition {
+        return (-not $statusProc) -or $statusProc.HasExited
+    } -MaxTimeoutSeconds 10 | Out-Null
+    if ($statusProc -and -not $statusProc.HasExited) {
+        try { $statusProc | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+    } elseif ($statusProc -and $statusProc.ExitCode -eq 0) {
         $wslWorking = $true
     }
 } catch {}
+Remove-Item "$env:TEMP\wsl_status_check.txt", "$env:TEMP\wsl_status_error.txt" -Force -ErrorAction SilentlyContinue
 
 if ($wslWorking) {
     $wslFeatEnabled = $true
@@ -689,13 +702,26 @@ if ($registeredDistros -contains $wslName) {
     #    확인하지 못했다는 이유만으로 배포판을 지우면 안의 데이터가 전부 사라지기 때문입니다.
     $hasDefaultUser = $false
     $confReadOk = $false
+    # 배포판 기동이 걸리면(WSL 오류) 그대로 멈추지 않게 60초 타임아웃 — 시간이 지나면 "확인 불가"($confReadOk=$false)로 보고
+    # 아래 분기가 배포판을 지우지 않고 안내 후 멈춥니다(첫 기동은 수십 초 걸릴 수 있어 넉넉히 둠).
+    $confOutFile = Join-Path $env:TEMP ("dt2_wslconf_" + [Guid]::NewGuid().ToString('N').Substring(0, 8) + ".txt")
     try {
-        $wslConfContent = [string](@(wsl.exe -d $wslName -u root -- bash -c "cat /etc/wsl.conf 2>/dev/null; echo __DT2_OK__" 2>$null) | Out-String)
+        $confProc = Start-Process wsl.exe -ArgumentList "-d $wslName -u root -- bash -c `"cat /etc/wsl.conf 2>/dev/null; echo __DT2_OK__`"" `
+            -PassThru -NoNewWindow -RedirectStandardOutput $confOutFile -RedirectStandardError "$confOutFile.err" -ErrorAction Stop
+        $null = $confProc.Handle
+        Wait-WithSpinner -Message "기존 배포판 '$wslName' 상태 확인 중" -Condition { $confProc.HasExited } -MaxTimeoutSeconds 60 | Out-Null
+        if (-not $confProc.HasExited) {
+            try { $confProc | Stop-Process -Force -ErrorAction SilentlyContinue } catch {}
+            $wslConfContent = ""
+        } else {
+            $wslConfContent = [System.IO.File]::ReadAllText($confOutFile, [System.Text.UTF8Encoding]::new($false))
+        }
         $confReadOk = ($wslConfContent -match "__DT2_OK__")
         if ($wslConfContent -match "\[user\][\s\S]*?default\s*=") {
             $hasDefaultUser = $true
         }
     } catch {}
+    Remove-Item $confOutFile, "$confOutFile.err" -Force -ErrorAction SilentlyContinue
 
     if ($hasDefaultUser) {
         Write-Success "기존에 설치된 WSL2 배포판 '$wslName'이 이미 존재하여 이를 그대로 사용합니다."
