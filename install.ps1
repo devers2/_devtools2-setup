@@ -721,6 +721,12 @@ if ($registeredDistros -contains $wslName) {
         if (Prompt-Confirm "미완성 배포판 '$wslName'을 삭제하고 새로 설치하시겠습니까?" "N") {
             Write-Info "미완성 배포판을 초기화(unregister)하고 설치를 다시 시작합니다..."
             wsl.exe --unregister $wslName 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                # 실패한 채 진행하면 비밀번호·내려받기까지 마친 뒤 import 단계에서야 실패한다
+                Write-Fail "배포판 '$wslName' 을(를) 삭제하지 못했습니다 (종료 코드: $LASTEXITCODE). 'wsl --shutdown' 후 다시 실행해 주세요."
+                Pause-Script
+                Exit-WslSetup 1
+            }
             Start-Sleep -Seconds 1
             $registeredDistros = @()
         } else {
@@ -1111,7 +1117,14 @@ function Install-NewDevtools2Distro {
             }
             Write-Success "Ubuntu RootFS SHA256 무결성 검증 통과"
         } else {
-            Write-Warn "SHA256SUMS 를 받지 못해 RootFS 체크섬 검증 없이 계속합니다."
+            # 기준값 없이 진행하면 검증하지 않은 rootfs 로 배포판을 만들게 되므로 확인을 받는다(기본 N)
+            Write-Warn "SHA256SUMS 를 받지 못해 RootFS 체크섬을 검증할 수 없습니다."
+            if (-not (Prompt-Confirm "👉 검증 없이 이 RootFS 로 계속하시겠습니까?" "N")) {
+                Remove-Item $tempTarPath -Force -ErrorAction SilentlyContinue
+                Write-Info "설치를 중단합니다. 네트워크를 확인한 뒤 다시 실행해 주세요."
+                Pause-Script
+                Exit-WslSetup 1
+            }
         }
 
         # ── 4. 지정 경로에 WSL2 배포판 직접 Import ─────────────────────────────
@@ -1209,14 +1222,17 @@ function Install-NewDevtools2Distro {
         Write-Output "${createdUsername}:${plainPassword}" | wsl -d $wslName -u root -- bash -c "tr -d '\r' | chpasswd"
         $chpasswdExit = $LASTEXITCODE
         $plainPassword = $null
+        # 이 함수는 dot-source 로 불려 확인용 평문(plain1·plain2)과 SecureString 도 스크립트 범위에 남는다 → 함께 지운다
+        # (이후 같은 세션에서 실행되는 설치 스크립트·오류 출력에 섞이지 않게)
+        Remove-Variable -Name plain1, plain2, pw1, pw2, bstr1, bstr2 -ErrorAction SilentlyContinue
         if ($chpasswdExit -ne 0) {
             Write-Fail "사용자 비밀번호 설정(chpasswd) 실패 (종료 코드: $chpasswdExit)"
             Pause-Script
             Exit-WslSetup 1
         }
 
-        # 2) hostname 및 /etc/wsl.conf 설정 (기존 설정 보존하며 default user, systemd=true, interop 섹션 병합)
-        wsl -d $wslName -u root -- bash -c "echo '$wslName' > /etc/hostname"
+        # 2) /etc/wsl.conf 설정 (기존 설정 보존하며 default user, systemd=true, interop 섹션 병합)
+        #    (/etc/hostname 은 쓰지 않는다 — WSL 이 부팅 때 Windows 컴퓨터 이름으로 덮어써 효과가 없었다(실측))
         $mergeWslConfPy = @'
 import configparser, sys
 
@@ -1346,7 +1362,9 @@ $env:DT2_KEEP_ACCOUNT = $keepAccount
 # ==============================================================================
 # clone 한 저장소의 Windows 설치 스크립트 실행
 # ==============================================================================
-$repoWin = Get-WslDevtools2Path $wslName
+# 방금 install.sh 가 clone·갱신한 배포판 안의 저장소를 실행한다. $env:DEVTOOLS2(VS Code 설정이 사용자 환경 변수로 남김)가
+# 예전 배포판·다른 worktree 를 가리켜도 그쪽의 옛 설치 스크립트가 실행되지 않게(-DistroOnly — 같은 체크아웃 원칙).
+$repoWin = Get-WslDevtools2Path $wslName -DistroOnly
 $masterPath = Join-Path $repoWin "scripts\windows\setup-devtools2-wsl.ps1"
 if (-not (Test-Path -LiteralPath $masterPath)) {
     Write-Fail "Windows 설치 스크립트를 찾을 수 없습니다: $masterPath"

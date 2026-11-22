@@ -849,8 +849,9 @@ function Get-WslUncRoot {
 
 # WSL 내부의 _devtools2 디렉터리 경로 반환 (\\wsl$ 및 \\wsl.localhost 자동 탐지)
 function Get-WslDevtools2Path {
-    param([string]$Distro)
-    if ($env:DEVTOOLS2 -and (Test-Path $env:DEVTOOLS2)) {
+    # -DistroOnly: $env:DEVTOOLS2 를 보지 않고 배포판 안의 저장소만 찾는다(시작 스크립트가 방금 받은 체크아웃을 실행할 때)
+    param([string]$Distro, [switch]$DistroOnly)
+    if (-not $DistroOnly -and $env:DEVTOOLS2 -and (Test-Path $env:DEVTOOLS2)) {
         return $env:DEVTOOLS2
     }
     if (-not [string]::IsNullOrEmpty($Distro)) {
