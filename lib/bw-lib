@@ -660,13 +660,16 @@ bw_setup_git_config() {
     git config --global user.name "$_final_git_name"
     git config --global user.email "$_final_git_email"
     git config --global core.quotepath false
-    git config --global credential.helper store
+    # 이미 쓰는 helper(manager·libsecret 등)가 있으면 바꾸지 않는다(아래 bw_setup_github_auth 와 같은 규칙)
+    if [ -z "$(git config --global --get credential.helper 2>/dev/null)" ]; then
+        git config --global credential.helper store
+    fi
     echo ""
     echo "✅ git config 전역 설정이 완료되었습니다:"
     echo "   user.name         = $_final_git_name"
     echo "   user.email        = $_final_git_email"
     echo "   core.quotepath    = false"
-    echo "   credential.helper = store"
+    echo "   credential.helper = $(git config --global --get credential.helper 2>/dev/null)"
 }
 
 # ── git 인증 정보 저장 (~/.git-credentials) ──────────────────────────────────
@@ -761,7 +764,10 @@ bw_save_git_credentials() {
     grep -v -E "@${_cred_host}(/|:|$)" ~/.git-credentials > "$_tmp_creds" 2>/dev/null || true
     echo "$_cred_line" >> "$_tmp_creds"
     chmod 600 "$_tmp_creds"
-    mv "$_tmp_creds" ~/.git-credentials
+    # mv 로 바꾸면 ~/.git-credentials 가 다른 곳을 가리키는 링크일 때 링크가 일반 파일로 바뀌어 원본과 갈라진다
+    # → 실제 파일(링크 대상)에 내용만 덮어쓴다(권한·inode 유지).
+    cat "$_tmp_creds" > "$(readlink -f ~/.git-credentials 2>/dev/null || echo ~/.git-credentials)"
+    rm -f "$_tmp_creds"
     _bw_trap_restore
     echo "✅ PAT 가 ~/.git-credentials 에 저장되었습니다. (host: $_cred_host)"
 
