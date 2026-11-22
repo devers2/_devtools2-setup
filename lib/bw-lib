@@ -139,7 +139,8 @@ clear_clipboard() {
 # 백그라운드 타이머로 N초 후 클립보드를 비웁니다 (기본 30초).
 clear_clipboard_delayed() {
     local sec="${1:-30}"
-    ( sleep "$sec" && clear_clipboard ) >/dev/null 2>&1 &
+    # HUP 무시: 명령 팔레트 창을 닫아도(SIGHUP) 타이머가 죽지 않고 클립보드를 비우게 한다
+    ( trap '' HUP; sleep "$sec" && clear_clipboard ) >/dev/null 2>&1 &
 }
 
 # ── 호출자 trap 보존 헬퍼 ────────────────────────────────────────────────────
