@@ -28,6 +28,10 @@ $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 # --- 윈도우 PowerShell 기본 파란색 프로그레스바 팝업 끄기 (텍스트 깨짐 및 커서 겹침 방지)
 $ProgressPreference = 'SilentlyContinue'
 
+# --- TLS 1.2 켜기: 업데이트가 덜 된 Windows 10 의 PS 5.1 은 기본값에 TLS 1.2 가 없어 GitHub HTTPS 연결이 실패할 수 있음
+#     (기존 값에 더하기만 하므로 TLS 1.3 등 이미 켜진 것은 그대로)
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+
 
 # ── 공용 함수(lib/ui.ps1): 이 스크립트와 같은 커밋의 파일을 받습니다 ──
 #   main 의 최신 커밋을 먼저 정해, 받는 도중 push 가 있어도 install.ps1·ui.ps1·install.sh 가 같은 커밋이 되게 합니다.

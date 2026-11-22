@@ -9,6 +9,10 @@
 # ⚠️ 공개 저장소입니다. 회사·고객 정보, 접속 주소, 비밀값을 넣지 마십시오.
 # ==============================================================================
 
+# TLS 1.2 켜기: 업데이트가 덜 된 Windows 10 의 PS 5.1 은 기본값에 TLS 1.2 가 없어 GitHub HTTPS(버전 조회·AutoHotkey 등
+# 내려받기)가 실패할 수 있다. 기존 값에 더하기만 하므로 이미 켜진 프로토콜은 그대로 둔다.
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
+
 # ==============================================================================
 # 전역 공통 점자 스피너 프레임 (Braille Spinner Frames)
 # Linux _common.sh 의 _spinner_frames 와 100% 동일한 유니코드 점자 프레임을 공유합니다.
@@ -618,9 +622,15 @@ namespace DevTools2 {
         private static uint originalMode = 0;
         private static bool isModified = false;
         private static ConsoleCancelEventHandler cancelHandler = null;
+        // 중첩 호출 수: 마스터가 끈 상태에서 하위 스크립트가 다시 Disable/Restore 해도, 하위의 Restore 가
+        // "이미 꺼진 모드" 로 originalMode 를 덮어써 복원하는 바람에 마스터 끝의 Restore 가 아무 일도 안 하던 문제 방지.
+        // 처음 Disable 때의 모드만 기억하고, 마지막 Restore 에서만 되돌린다.
+        private static int depth = 0;
 
         public static bool DisableQuickEdit() {
             try {
+                if (isModified) { depth++; return true; }
+
                 IntPtr hStdin = GetStdHandle(STD_INPUT_HANDLE);
                 if (hStdin == IntPtr.Zero || hStdin == (IntPtr)(-1)) return false;
 
@@ -630,6 +640,7 @@ namespace DevTools2 {
                 if (!isModified) {
                     // Ctrl+C 이벤트 발생 시 안전 복원 핸들러 등록
                     cancelHandler = new ConsoleCancelEventHandler((sender, args) => {
+                        depth = 1;   // Ctrl+C 는 중첩과 상관없이 바로 되돌린다
                         RestoreQuickEdit();
                     });
                     Console.CancelKeyPress += cancelHandler;
@@ -637,7 +648,7 @@ namespace DevTools2 {
 
                 uint newMode = (originalMode & ~ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS;
                 bool result = SetConsoleMode(hStdin, newMode);
-                if (result) isModified = true;
+                if (result) { isModified = true; depth = 1; }
                 return result;
             } catch {
                 return false;
@@ -647,6 +658,7 @@ namespace DevTools2 {
         public static bool RestoreQuickEdit() {
             try {
                 if (!isModified) return true;
+                if (depth > 1) { depth--; return true; }   // 바깥 호출이 아직 끈 상태를 쓰는 중
 
                 IntPtr hStdin = GetStdHandle(STD_INPUT_HANDLE);
                 if (hStdin == IntPtr.Zero || hStdin == (IntPtr)(-1)) return false;
@@ -654,6 +666,7 @@ namespace DevTools2 {
                 bool result = SetConsoleMode(hStdin, originalMode | ENABLE_EXTENDED_FLAGS);
                 if (result) {
                     isModified = false;
+                    depth = 0;
                     if (cancelHandler != null) {
                         try { Console.CancelKeyPress -= cancelHandler; } catch {}
                         cancelHandler = null;
