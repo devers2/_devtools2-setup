@@ -1271,8 +1271,11 @@ $keepOutFile = "/tmp/dt2-keep-account.$PID.$([Guid]::NewGuid().ToString('N').Sub
 Write-Step "[저장소] GitHub 계정 확인 및 DevTools2 저장소 받기 (WSL 안 install.sh)"
 # --exec: 셸을 거치지 않고 인자를 그대로 넘깁니다. install.sh 는 clone(또는 최신으로 맞추기)까지만 하고 끝냅니다
 # (그 뒤 리눅스 설치 단계는 아래 Windows 설치 스크립트가 임시 sudo 와 함께 순서대로 실행).
+# pipefail: 없으면 curl 이 실패해도(네트워크·잘못된 DT2_SETUP_REF) 빈 입력을 받은 bash 가 0 으로 끝나 성공으로 처리되고,
+# 저장소를 갱신하지 않은 채 옛 체크아웃으로 설치가 이어졌다. (install.sh 는 파이프 버퍼(64KB)보다 작아 curl 이 먼저 다 쓰고
+# 끝나므로, bash 가 일찍 끝나도 curl 의 SIGPIPE 로 잘못 실패하지 않는다)
 wsl.exe -d $wslName --exec env "DT2_KEEP_ACCOUNT=$keepAccount" "DT2_KEEP_ACCOUNT_OUT=$keepOutFile" "DT2_SETUP_REF=$($env:DT2_SETUP_REF)" DT2_SETUP_CLONE_ONLY=1 `
-    bash -c "curl -fsSL '$SETUP_RAW/install.sh' | bash"
+    bash -c "set -o pipefail; curl -fsSL '$SETUP_RAW/install.sh' | bash"
 $syncExit = $LASTEXITCODE
 # 1줄: 계정 사용(y/n), 2줄: 입력한 Bitwarden 항목 이름(없으면 빈 줄 — 이어지는 Step 3 의 기본 항목으로 넘김)
 $keepLines = @((wsl.exe -d $wslName --exec cat $keepOutFile 2>$null | Out-String) -split "`r?`n")

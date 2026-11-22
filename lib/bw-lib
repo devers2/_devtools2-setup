@@ -225,7 +225,7 @@ _bw_do_unlock() {
     for _bw_try in 1 2 3; do
         # 공용 prompt_password 함수가 로드되어 있으면 사용, 없으면 자체 비영문 감지 입력 루프 실행
         if command -v prompt_password &>/dev/null; then
-            prompt_password _MASTER_PASS "🔐 Bitwarden 마스터 비밀번호 입력 (보안 마스킹): 🔒"
+            prompt_password _MASTER_PASS "🔐 Bitwarden 마스터 비밀번호 입력 (보안 마스킹): 🔒" || return 1
         else
             while true; do
                 echo ""
@@ -891,7 +891,7 @@ bw_interactive_login() {
         _bw_login_ask_email || { _status="fail"; break; }
         _pw=""
         if command -v prompt_password &>/dev/null; then
-            prompt_password _pw "🔐 Bitwarden 마스터 비밀번호 입력 (보안 마스킹): 🔒"
+            prompt_password _pw "🔐 Bitwarden 마스터 비밀번호 입력 (보안 마스킹): 🔒" || { _status="fail"; break; }
         else
             read -rsp "🔐 Bitwarden 마스터 비밀번호 입력 (보안 마스킹): 🔒 " _pw </dev/tty
             echo ""
