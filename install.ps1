@@ -84,8 +84,7 @@ if (-not $isAdmin) {
         Write-Host "   $CmdToRun" -ForegroundColor Cyan
         Write-Host ""
         if (-not [string]::IsNullOrEmpty($PSCommandPath)) {
-            Write-Host " (또는 탐색기에서 install.ps1 우클릭 → PowerShell 관리자로 실행)" -ForegroundColor DarkGray
-            Write-Host ""
+            # (탐색기 우클릭 → "PowerShell 로 실행" 은 5.1 이 NoBOM UTF-8 파일을 CP949 로 읽어 파싱이 깨지므로 안내하지 않음)
             Pause-Script
         }
         # ⚠️ exit 대신 return 사용: irm | iex 환경에서 exit 을 호출하면 터미널 창 자체가
@@ -114,7 +113,11 @@ if (-not $isAdmin) {
         }
     } else {
         # ── 로컬 파일 실행 모드 ────────────────────────────────────────────────
-        $localCmd = "Set-ExecutionPolicy Bypass -Scope Process -Force; & `"$PSCommandPath`""
+        # Windows PowerShell 5.1 은 NoBOM UTF-8 파일을 CP949 로 읽어 파싱이 깨지므로(실측: 오류 21건) 파일을 직접 실행(& 경로, -File)하지 않고
+        # UTF-8 로 읽어 scriptblock 으로 실행한다(Invoke-Dt2LocalScript 와 같은 방식). 공용 함수·하위 파일은 어차피
+        # $SETUP_RAW 에서 받으므로 이렇게 실행해도(PSCommandPath 가 비어 온라인 모드로 동작) 결과가 같다.
+        $localPathLit = $PSCommandPath -replace "'", "''"
+        $localCmd = "Set-ExecutionPolicy Bypass -Scope Process -Force; & ([scriptblock]::Create([IO.File]::ReadAllText('$localPathLit', [Text.UTF8Encoding]::new(`$false))))"
         if ($isStorePwsh) {
             # Store 버전 pwsh는 -Verb RunAs 차단됨 → 사용자에게 수동 실행 안내
             & $showElevationGuide -CmdToRun $localCmd -Reason "Microsoft Store 설치 PowerShell 은 UAC 자동 권한 승격이 차단됩니다."
@@ -126,7 +129,9 @@ if (-not $isAdmin) {
             # ⚠️ conhost.exe로 감싸서 -Verb RunAs 승격 시도 금지 — "액세스 거부"로 실패함(실측).
             #   (목적: WT 자기파괴 방지였음 — 2.setup-windows-terminal.ps1의 WT_SESSION 감지로만 방어 중)
             try {
-                Start-Process $psExe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs -ErrorAction Stop
+                # pwsh 는 NoBOM UTF-8 을 바로 읽으므로 -File, powershell.exe(5.1)는 위 scriptblock 명령으로
+                $elevArgs = if ($pwshPath) { "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" } else { "-NoProfile -ExecutionPolicy Bypass -Command `"$localCmd`"" }
+                Start-Process $psExe -ArgumentList $elevArgs -Verb RunAs -ErrorAction Stop
                 Exit-Devtools2Setup 0
             } catch {
                 & $showElevationGuide -CmdToRun $localCmd
@@ -151,66 +156,23 @@ Write-Host "====================================================================
 $_wslResumeFlagFile = "$env:TEMP\.devtools2_wsl_resume"
 
 # 1. Windows 필수 선택적 기능 상태 확인 헬퍼
-function Get-IsFeatureEnabled {
+function Get-FeatureState {
     param([string]$FeatureName)
     try {
         $feat = Get-WindowsOptionalFeature -Online -FeatureName $FeatureName -ErrorAction SilentlyContinue
-        return ($null -ne $feat -and $feat.State -eq 'Enabled')
+        if ($null -eq $feat) { return '' }
+        return [string]$feat.State
     } catch {
-        return $false
+        return ''
     }
 }
-
-# WSL2 엔진 고속 작동 확인 (이미 설치 및 정상 작동 중이면 0.03초 만에 즉시 통과)
-$wslWorking = $false
-try {
-    $null = wsl.exe --status 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        $wslWorking = $true
-    }
-} catch {}
-
-if ($wslWorking) {
-    $wslFeatEnabled = $true
-    $vmFeatEnabled  = $true
-} else {
-    Write-Info "WSL2 환경 및 Windows 필수 기능 점검 중..."
-    $wslFeatEnabled = Get-IsFeatureEnabled "Microsoft-Windows-Subsystem-Linux"
-    $vmFeatEnabled  = Get-IsFeatureEnabled "VirtualMachinePlatform"
+function Get-IsFeatureEnabled {
+    param([string]$FeatureName)
+    return ((Get-FeatureState $FeatureName) -eq 'Enabled')
 }
 
-# 필수 선택적 기능 중 하나라도 비활성화되어 있고 재개 플래그도 없는 경우 활성화 수행
-if (-not ($wslFeatEnabled -and $vmFeatEnabled) -and -not (Test-Path $_wslResumeFlagFile)) {
-    Write-Step "[Step 0-1] WSL2 필수 선택적 기능 활성화"
-    Write-Warn "WSL2 실행에 필요한 Windows 선택적 기능이 비활성화되어 있습니다."
-    Write-Info "선택적 기능(VirtualMachinePlatform 및 Microsoft-Windows-Subsystem-Linux)을 활성화합니다..."
-
-    if (-not $wslFeatEnabled) {
-        $p1 = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"`$ProgressPreference = 'SilentlyContinue'; Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -WarningAction SilentlyContinue | Out-Null`"" -PassThru -NoNewWindow
-        Wait-WithSpinner -Message "Microsoft-Windows-Subsystem-Linux 기능 활성화" -Condition { $p1.HasExited }
-    }
-    if (-not $vmFeatEnabled) {
-        $p2 = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"`$ProgressPreference = 'SilentlyContinue'; Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -WarningAction SilentlyContinue | Out-Null`"" -PassThru -NoNewWindow
-        Wait-WithSpinner -Message "VirtualMachinePlatform 기능 활성화" -Condition { $p2.HasExited }
-    }
-
-    # wsl --install 로 WSL2 커널 및 기본 컴포넌트 설치 (배포판 없이)
-    $pKernel = Start-Process wsl.exe -ArgumentList "--install --no-distribution" -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\wsl_kernel_install.txt" -ErrorAction SilentlyContinue
-    Wait-WithSpinner -Message "WSL2 커널 컴포넌트 확인/설치" -Condition { $pKernel.HasExited }
-    Remove-Item "$env:TEMP\wsl_kernel_install.txt" -Force -ErrorAction SilentlyContinue
-
-    Write-Host ""
-    Write-Host "===========================================================================" -ForegroundColor Yellow
-    Write-Host "  ✅ WSL2 필수 선택적 기능 활성화 완료!" -ForegroundColor Green
-    Write-Host "  🔄 변경 사항을 적용하려면 Windows를 재시작해야 합니다." -ForegroundColor Yellow
-    Write-Host "===========================================================================" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  재시작 후 이 스크립트를 다시 실행하면 WSL2 배포판 설치부터 자동으로 이어서 진행됩니다." -ForegroundColor White
-    Write-Host ""
-
-    # 재개 플래그 파일 저장 (재시작 후 이어서 진행하기 위해, UTF-8 NoBOM 보장)
-    [System.IO.File]::WriteAllText($_wslResumeFlagFile, (Get-Date).ToString(), [System.Text.UTF8Encoding]::new($false))
-
+# 재시작 안내·확인(기능을 켠 직후, 또는 켜 두고 아직 재시작하지 않은 채 다시 실행했을 때)
+function Request-RestartForWslFeatures {
     Write-Warn "재시작하기 전에 열려 있는 다른 프로그램의 작업을 저장해 주세요."
     if (Prompt-Confirm "👉 지금 바로 컴퓨터를 재시작하시겠습니까?" "Y") {
         Write-Info "컴퓨터를 재시작합니다..."
@@ -233,6 +195,82 @@ if (-not ($wslFeatEnabled -and $vmFeatEnabled) -and -not (Test-Path $_wslResumeF
         Pause-Script
         Exit-Devtools2Setup 0
     }
+}
+
+# WSL2 엔진 고속 작동 확인 (이미 설치 및 정상 작동 중이면 0.03초 만에 즉시 통과)
+$wslWorking = $false
+try {
+    $null = wsl.exe --status 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $wslWorking = $true
+    }
+} catch {}
+
+if ($wslWorking) {
+    $wslFeatEnabled = $true
+    $vmFeatEnabled  = $true
+} else {
+    Write-Info "WSL2 환경 및 Windows 필수 기능 점검 중..."
+    $wslFeatEnabled = Get-IsFeatureEnabled "Microsoft-Windows-Subsystem-Linux"
+    $vmFeatEnabled  = Get-IsFeatureEnabled "VirtualMachinePlatform"
+}
+
+# 재개 플래그가 있는데 기능이 아직 켜지지 않았으면: 재시작 전(EnablePending)이면 재시작을 다시 안내하고,
+# 그 밖(켜기 실패 등)이면 플래그를 지우고 아래에서 다시 켠다.
+# (예전에는 플래그만 보고 기능 켜기를 건너뛰고 플래그를 지운 채 진행해, 뒤의 wsl 단계에서 원인 모를 실패가 났다)
+if ((Test-Path $_wslResumeFlagFile) -and -not ($wslFeatEnabled -and $vmFeatEnabled)) {
+    $featStates = @((Get-FeatureState "Microsoft-Windows-Subsystem-Linux"), (Get-FeatureState "VirtualMachinePlatform"))
+    if ($featStates -contains 'EnablePending') {
+        Write-Warn "WSL 에 필요한 Windows 기능을 켰지만 아직 재시작하지 않았습니다. 재시작해야 적용됩니다."
+        Request-RestartForWslFeatures
+    }
+    Write-Warn "이전 실행에서 Windows 기능을 켜지 못한 것 같습니다. 다시 시도합니다."
+    Remove-Item $_wslResumeFlagFile -Force -ErrorAction SilentlyContinue
+}
+
+# 필수 선택적 기능 중 하나라도 비활성화되어 있고 재개 플래그도 없는 경우 활성화 수행
+if (-not ($wslFeatEnabled -and $vmFeatEnabled) -and -not (Test-Path $_wslResumeFlagFile)) {
+    Write-Step "[Step 0-1] WSL2 필수 선택적 기능 활성화"
+    Write-Warn "WSL2 실행에 필요한 Windows 선택적 기능이 비활성화되어 있습니다."
+    Write-Info "선택적 기능(VirtualMachinePlatform 및 Microsoft-Windows-Subsystem-Linux)을 활성화합니다..."
+
+    # 기능 켜기 결과를 확인한다(-ErrorAction Stop → 실패하면 자식 PowerShell 종료 코드가 0 이 아님).
+    # ⚠️ PS 5.1 은 Handle 을 미리 열지 않으면 끝난 뒤 ExitCode 가 $null 이라 .Handle 을 바로 읽어 둔다.
+    $featFailed = @()
+    foreach ($featName in @('Microsoft-Windows-Subsystem-Linux', 'VirtualMachinePlatform')) {
+        if (($featName -eq 'Microsoft-Windows-Subsystem-Linux' -and $wslFeatEnabled) -or ($featName -eq 'VirtualMachinePlatform' -and $vmFeatEnabled)) { continue }
+        $pFeat = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"`$ProgressPreference = 'SilentlyContinue'; Enable-WindowsOptionalFeature -Online -FeatureName $featName -NoRestart -WarningAction SilentlyContinue -ErrorAction Stop | Out-Null`"" -PassThru -NoNewWindow
+        $null = $pFeat.Handle
+        Wait-WithSpinner -Message "$featName 기능 활성화" -Condition { $pFeat.HasExited }
+        $pFeat.WaitForExit()
+        # 3010 = 재시작 필요(성공)
+        if ($pFeat.ExitCode -ne 0 -and $pFeat.ExitCode -ne 3010) { $featFailed += "$featName(종료 코드 $($pFeat.ExitCode))" }
+    }
+    if ($featFailed.Count -gt 0) {
+        Write-Fail "Windows 기능을 켜지 못했습니다: $($featFailed -join ', ')"
+        Write-Warn "'Windows 기능 켜기/끄기' 에서 'Linux용 Windows 하위 시스템'·'가상 머신 플랫폼' 을 직접 켠 뒤 재시작하고 다시 실행해 주세요."
+        Pause-Script
+        Exit-Devtools2Setup 1
+    }
+
+    # wsl --install 로 WSL2 커널 및 기본 컴포넌트 설치 (배포판 없이)
+    $pKernel = Start-Process wsl.exe -ArgumentList "--install --no-distribution" -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\wsl_kernel_install.txt" -ErrorAction SilentlyContinue
+    Wait-WithSpinner -Message "WSL2 커널 컴포넌트 확인/설치" -Condition { $pKernel.HasExited }
+    Remove-Item "$env:TEMP\wsl_kernel_install.txt" -Force -ErrorAction SilentlyContinue
+
+    Write-Host ""
+    Write-Host "===========================================================================" -ForegroundColor Yellow
+    Write-Host "  ✅ WSL2 필수 선택적 기능 활성화 완료!" -ForegroundColor Green
+    Write-Host "  🔄 변경 사항을 적용하려면 Windows를 재시작해야 합니다." -ForegroundColor Yellow
+    Write-Host "===========================================================================" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  재시작 후 이 스크립트를 다시 실행하면 WSL2 배포판 설치부터 자동으로 이어서 진행됩니다." -ForegroundColor White
+    Write-Host ""
+
+    # 재개 플래그 파일 저장 (재시작 후 이어서 진행하기 위해, UTF-8 NoBOM 보장)
+    [System.IO.File]::WriteAllText($_wslResumeFlagFile, (Get-Date).ToString(), [System.Text.UTF8Encoding]::new($false))
+
+    Request-RestartForWslFeatures
 }
 
 # 재개 플래그가 있으면 이전 실행에서 WSL 기능을 설치하고 재부팅한 것이므로 바로 진행

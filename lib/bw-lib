@@ -202,11 +202,38 @@ _BW_HOME_DIR="${HOME:-$USERPROFILE}"
 _BW_DEVTOOLS2_DIR="${_BW_HOME_DIR}/.devtools2"
 mkdir -p "$_BW_DEVTOOLS2_DIR"
 
-if [ -d "/dev/shm" ]; then
-    _BW_SESSION_FILE="/dev/shm/bw_session_${UID:-$(id -u)}"
+# 메모리(tmpfs)에 두되, 누구나 쓸 수 있는 /dev/shm 바로 아래의 고정 이름은 쓰지 않는다:
+# 다른 사용자가 같은 이름의 파일·링크를 미리 만들어 두면 남의 세션 값을 읽거나, 세션 키가 남의 파일로 새거나,
+# 링크를 따라가 다른 파일을 덮어쓸 수 있다(fs.protected_* 가 꺼진 환경). 그래서
+#   1) XDG_RUNTIME_DIR(사용자 전용 700, 로그아웃하면 비워짐) → 2) /dev/shm 안의 내 전용 폴더(700) → 3) ~/.devtools2
+# 순서로 고르고, 읽고 쓸 때 내 소유·일반 파일인지 확인한다(_bw_read_session_file·_bw_write_session_file).
+# install.sh 의 일회성 설치는 이 값을 작업 폴더로 바꾼다.
+_bw_private_dir_ok() { [ -d "$1" ] && [ ! -L "$1" ] && [ -O "$1" ] && [ -z "$(find "$1" -maxdepth 0 -perm /077 2>/dev/null)" ]; }
+_BW_UID="${UID:-$(id -u)}"
+if [ -n "${XDG_RUNTIME_DIR:-}" ] && _bw_private_dir_ok "$XDG_RUNTIME_DIR"; then
+    _BW_SESSION_FILE="$XDG_RUNTIME_DIR/bw_session"
+elif [ -d "/dev/shm" ] && { [ -e "/dev/shm/dt2-${_BW_UID}" ] || (umask 077; mkdir "/dev/shm/dt2-${_BW_UID}" 2>/dev/null); } \
+    && _bw_private_dir_ok "/dev/shm/dt2-${_BW_UID}"; then
+    _BW_SESSION_FILE="/dev/shm/dt2-${_BW_UID}/bw_session"
 else
     _BW_SESSION_FILE="${_BW_DEVTOOLS2_DIR}/bw_session"
 fi
+# 예전 위치(/dev/shm/bw_session_<uid>)에 내가 남긴 세션 키가 있으면 지운다
+if [ -f "/dev/shm/bw_session_${_BW_UID}" ] && [ ! -L "/dev/shm/bw_session_${_BW_UID}" ] && [ -O "/dev/shm/bw_session_${_BW_UID}" ]; then
+    rm -f "/dev/shm/bw_session_${_BW_UID}"
+fi
+
+# 세션 파일 읽기: 내 소유의 일반 파일일 때만(남이 만든 파일·링크는 무시)
+_bw_read_session_file() {
+    [ -f "$_BW_SESSION_FILE" ] && [ ! -L "$_BW_SESSION_FILE" ] && [ -O "$_BW_SESSION_FILE" ] || return 1
+    cat "$_BW_SESSION_FILE"
+}
+# 세션 파일 쓰기: 같은 폴더에 600 임시 파일을 만든 뒤 mv(기존 파일·링크를 따라 쓰지 않음)
+_bw_write_session_file() {
+    local _tmp
+    _tmp=$(umask 077; mktemp "${_BW_SESSION_FILE}.XXXXXX") || return 1
+    printf '%s\n' "$1" >"$_tmp" && mv -f "$_tmp" "$_BW_SESSION_FILE" || { rm -f "$_tmp"; return 1; }
+}
 
 # ── bw vault 잠금 해제 수행 ───────────────────────────────────────────────────
 _bw_do_unlock() {
@@ -271,11 +298,10 @@ _bw_do_unlock() {
         return 1
     fi
 
-    (umask 077; echo "$BW_SESSION" > "$_BW_SESSION_FILE")
-    chmod 600 "$_BW_SESSION_FILE" 2>/dev/null || true
+    _bw_write_session_file "$BW_SESSION" || echo "⚠️  세션 키를 파일에 저장하지 못했습니다(이번 실행에서만 유지): $_BW_SESSION_FILE" >&2
     export BW_SESSION
 
-    if [ -d "/dev/shm" ]; then
+    if [ "${_BW_SESSION_FILE#"$_BW_DEVTOOLS2_DIR"}" = "$_BW_SESSION_FILE" ]; then
         echo "✅ 잠금 해제 완료. (세션키가 메모리(tmpfs)에 저장되었습니다)"
     else
         echo "✅ 잠금 해제 완료. (세션이 ${_BW_SESSION_FILE} 에 저장되었습니다)"
@@ -295,7 +321,7 @@ bw_ensure_session() {
 
     # 저장된 세션키 로드 (환경변수 우선, 없으면 파일)
     if [ -z "${BW_SESSION:-}" ] && [ -f "$_BW_SESSION_FILE" ]; then
-        BW_SESSION=$(cat "$_BW_SESSION_FILE")
+        BW_SESSION=$(_bw_read_session_file || true)
         export BW_SESSION
     fi
 
@@ -941,8 +967,7 @@ bw_interactive_login() {
     fi
     BW_SESSION="$_out"
     export BW_SESSION
-    (umask 077; echo "$BW_SESSION" > "$_BW_SESSION_FILE")
-    chmod 600 "$_BW_SESSION_FILE" 2>/dev/null || true
+    _bw_write_session_file "$BW_SESSION" || echo "⚠️  세션 키를 파일에 저장하지 못했습니다(이번 실행에서만 유지): $_BW_SESSION_FILE" >&2
     echo "✅ Bitwarden 로그인 완료 (${_email})"
     return 0
 }
