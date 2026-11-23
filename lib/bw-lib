@@ -1081,13 +1081,13 @@ bw_setup_github_auth() {
             else
                 echo "ℹ️  이 PC 에 계정 ${BW_STORED_GH_USER} 의 GitHub PAT 가 이미 저장되어 있습니다. (GitHub 에 연결할 수 없어 유효한지 확인하지 못함)"
             fi
-            # 항목 이름을 인수로 받았으면 그 항목을, 아니면 y 다음에 항목 이름을 묻는다는 것을 알려 줌(bw_get_github_account —
-            # 기본 항목 이름은 그 질문의 기본값으로 보이므로 여기서는 줄이 넘치지 않게 뺌)
+            # 항목 이름을 인수로 받았으면 그 항목을 보여 줌. 아니면 y 다음에 bw_get_github_account 가 항목 이름을 물음
+            # (그 안내·기본 N 은 질문 줄에 적지 않음 — y 이후 동작이고 [y/N] 으로 이미 보임)
             local _ask
             if [ -n "$_item_arg" ]; then
-                _ask="   🔄 Bitwarden 항목 '${_item_arg}' 의 PAT 로 바꾸시겠습니까? (엔터: 그대로)"
+                _ask="   🔄 Bitwarden 항목 '${_item_arg}' 의 PAT 로 바꾸시겠습니까?"
             else
-                _ask="   🔄 Bitwarden 의 다른 계정 PAT 로 바꾸시겠습니까? (y: 항목 이름 입력, 엔터: 그대로)"
+                _ask="   🔄 Bitwarden 의 다른 계정 PAT 로 바꾸시겠습니까?"
             fi
             if prompt_confirm "$_ask" "N"; then
                 _replace=replace
