@@ -283,9 +283,13 @@ for r in json.load(sys.stdin):
     tag = r.get("tag_name", "")
     if r.get("draft") or r.get("prerelease") or not tag.startswith("cli-v"):
         continue
-    want = "bw-linux%s-%s.zip" % (suffix, tag[len("cli-v"):])
-    for a in r.get("assets", []):
-        if a.get("name") == want:
+    ver = tag[len("cli-v"):]
+    # 2026.11.0 부터 bw-linux-<ver>.zip → bw-bit-linux-<ver>.zip (같은 공식 판). 알려진 이름만 새 이름부터 확인합니다
+    # — 넓은 패턴으로 맞추면 라이선스 기능을 뺀 bw-oss-* 등 다른 판이 조용히 골라질 수 있음.
+    assets = {a.get("name"): a for a in r.get("assets", [])}
+    for want in ("bw-bit-linux%s-%s.zip" % (suffix, ver), "bw-linux%s-%s.zip" % (suffix, ver)):
+        a = assets.get(want)
+        if a:
             print(a.get("browser_download_url", ""), (a.get("digest") or "").replace("sha256:", ""))
             sys.exit(0)
 ' "$_suffix") || true
