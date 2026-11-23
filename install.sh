@@ -395,7 +395,7 @@ _sync_repo() {
 # ── 이어지는 설치 단계에 계정 결정 넘기기 (리눅스: 환경 변수, Windows: DT2_KEEP_ACCOUNT_OUT 파일) ──
 _hand_off_account() {
     # 여기서 입력한 Bitwarden 항목 이름을 이어지는 설치 단계(Step 3 GitHub 로그인 연결)의 기본값으로 넘김
-    #   (기본값이 아닌 항목을 썼으면 "Bitwarden 의 PAT 로 변경하시겠습니까? (항목)" 에도 그 이름이 보이도록)
+    #   (기본값이 아닌 항목을 썼으면 "다른 계정 PAT 로 바꾸시겠습니까?" 다음의 항목 이름 질문 기본값도 그 이름이 되도록)
     [ -n "${BW_GH_ITEM:-}" ] && export BW_DEFAULT_PAT_ITEM="$BW_GH_ITEM"
     # Windows install.ps1 이 이어지는 설치 단계에 넘기도록 결정(1줄: y/n)과 항목 이름(2줄, 없으면 빈 줄)을 파일로 돌려줌
     if [ -n "${DT2_KEEP_ACCOUNT_OUT:-}" ]; then

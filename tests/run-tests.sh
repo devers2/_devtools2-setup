@@ -137,7 +137,7 @@ rm -f "$T"/home/.git-credentials.bak.*
 printf 'https://tester:still-good@github.com\n' >"$T/home/.git-credentials"
 FAKE_BW2='bw_get_github_account() { echo BW-OPENED; BW_GH_USER=tester BW_GH_EMAIL=t@t BW_GH_PAT=new-pat-111; }; bw_setup_git_config() { :; }; bw_setup_gh_auth() { echo "GH-LOGIN:$1:${3:-}"; }'
 out=$(run "$FAKE_BW2; bw_github_token_check() { echo tester; return 0; }; bw_setup_github_auth; echo rc=\$?")
-check "PAT 있음(유효) → 계정 표시, 변경 기본 N → Bitwarden 없이 저장된 PAT 로 gh 만 로그인" 'grep -q "계정 tester (유효)" <<<"$out" && grep -q "변경하시겠습니까? (github.com-main)" <<<"$out" && ! grep -q BW-OPENED <<<"$out" && grep -q "GH-LOGIN:still-good:$" <<<"$out" && grep -q still-good "$T/home/.git-credentials"' "$out"
+check "PAT 있음(유효) → 계정 표시, 변경 기본 N → Bitwarden 없이 저장된 PAT 로 gh 만 로그인" 'grep -q "계정 tester 의 유효한 GitHub PAT" <<<"$out" && grep -q "다른 계정 PAT 로 바꾸시겠습니까? (y: 항목 이름 입력" <<<"$out" && ! grep -q BW-OPENED <<<"$out" && grep -q "GH-LOGIN:still-good:$" <<<"$out" && grep -q still-good "$T/home/.git-credentials"' "$out"
 out=$(run "$FAKE_BW2; bw_github_token_check() { return 2; }; bw_setup_github_auth; echo rc=\$?")
 check "PAT 있음(네트워크로 확인 불가) → 확인 못 했다고 표시, 기본 N 이면 그대로" 'grep -q "확인하지 못함" <<<"$out" && ! grep -q BW-OPENED <<<"$out" && grep -q still-good "$T/home/.git-credentials"' "$out"
 if command -v script >/dev/null 2>&1; then
