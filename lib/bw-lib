@@ -112,21 +112,21 @@ copy_to_clipboard() {
         text=$(cat)
     fi
 
-    if $IS_WSL; then
-        if command -v clip.exe &>/dev/null; then
-            printf "%s" "$text" | clip.exe
-            return 0
-        fi
+    # 도구가 "있는지"가 아니라 실제로 "성공했는지"를 보고, 실패하면 다음 도구로 넘어갑니다.
+    # 설치 스크립트가 wl-clipboard·xclip 을 함께 깔기 때문에, X11 세션(Wayland 아님)에서 wl-copy 만 시도하고
+    # 그 실패("Failed to connect to a Wayland server")를 성공으로 처리하면 복사되지 않은 채 "복사했습니다"가 나왔습니다.
+    # stdout 을 /dev/null 로 보내는 것은 xclip 이 백그라운드에 남아 stdout 을 잡고 있어 $(…) 호출이 멈추지 않게 하기 위함입니다.
+    if $IS_WSL && command -v clip.exe &>/dev/null; then
+        printf "%s" "$text" | clip.exe >/dev/null 2>&1 && return 0
     fi
     if command -v wl-copy &>/dev/null; then
-        printf "%s" "$text" | wl-copy
-        return 0
-    elif command -v xclip &>/dev/null; then
-        printf "%s" "$text" | xclip -selection clipboard
-        return 0
-    elif command -v xsel &>/dev/null; then
-        printf "%s" "$text" | xsel --clipboard --input
-        return 0
+        printf "%s" "$text" | wl-copy >/dev/null 2>&1 && return 0
+    fi
+    if command -v xclip &>/dev/null; then
+        printf "%s" "$text" | xclip -selection clipboard >/dev/null 2>&1 && return 0
+    fi
+    if command -v xsel &>/dev/null; then
+        printf "%s" "$text" | xsel --clipboard --input >/dev/null 2>&1 && return 0
     fi
     return 1
 }

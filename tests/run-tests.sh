@@ -248,6 +248,20 @@ mkdir -p "$T/plain" && echo keep >"$T/plain/f"
 out=$(run "KEEP=n; BW_GH_USER=u; BW_GH_PAT=p; DT2_DIR='$T/plain'; DT2_REPO_URL='$src'; _sync_repo")
 check "Git 저장소가 아닌 폴더는 .bak 으로 옮기고 clone" '[ -d "$T/plain/.git" ] && ls -d "$T"/plain.bak.* >/dev/null 2>&1' "$out"
 
+echo "▶ 4-1. 클립보드 복사 (copy_to_clipboard)"
+# X11 세션처럼 wl-copy 는 깔려 있지만 실패하는 경우 — 실패를 성공으로 보지 않고 xclip 으로 넘어가야 합니다
+mkdir -p "$T/clipbin"
+printf '#!/bin/sh\necho "Failed to connect to a Wayland server" >&2\nexit 1\n' >"$T/clipbin/wl-copy"
+printf '#!/bin/sh\ncat >"%s/clip.out"\n' "$T" >"$T/clipbin/xclip"
+chmod +x "$T/clipbin/wl-copy" "$T/clipbin/xclip"
+_clip() { PATH="$T/clipbin:/usr/bin:/bin" bash -c "source '$ROOT/lib/bw-lib'; IS_WSL=false; $1" 2>&1; }
+rm -f "$T/clip.out"
+out=$(_clip 'copy_to_clipboard "pw-1"; echo rc=$?')
+check "wl-copy 실패 → xclip 으로 복사" 'grep -qx "rc=0" <<<"$out" && [ "$(cat "$T/clip.out" 2>/dev/null)" = pw-1 ]' "$out"
+printf '#!/bin/sh\nexit 1\n' >"$T/clipbin/xclip"
+out=$(_clip 'copy_to_clipboard "pw-2"; echo rc=$?')
+check "모든 도구 실패 → 실패(1) 반환" 'grep -qx "rc=1" <<<"$out"' "$out"
+
 echo "▶ 5. 정리 (_cleanup)"
 # _devtools2 의 설치 Step 0 이 *.sh 를 실행 가능으로 바꾸므로, git 에 실행 비트 없이 들어가면 submodule 이 "고친 파일"로 보입니다
 nonexec=$(cd "$ROOT" && git ls-files -s -- '*.sh' 2>/dev/null | awk '$1 != "100755" {print $4}')
