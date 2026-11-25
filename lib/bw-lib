@@ -8,7 +8,8 @@
 # (scripts/fzf/bw-lib 는 그 파일을 가리키는 링크). 시작 스크립트(install.sh)도 같은 파일을 씁니다.
 #
 # 이 파일을 source 하면 아래 함수들이 현재 셸에 로드됩니다.
-#   bw_ensure_session            → BW_SESSION 을 보장 (없으면 unlock 수행)
+#   bw_ensure_session            → BW_SESSION 을 보장 (없으면 unlock 수행) + 보관함 동기화(bw_sync_if_stale)
+#   bw_sync_if_stale             → 마지막 동기화가 오래됐을 때만 bw sync (인수 0 = 항상)
 #   bw_get_folder_ids            → 폴더명으로 일치하는 모든 폴더 ID 목록 반환
 #   bw_get_items_by_folder_name  → 폴더명으로 아이템 JSON 청크 목록 반환
 #   bw_find_item_by_name         → 이름이 정확히 일치하는 아이템 JSON 반환
@@ -236,6 +237,37 @@ _bw_write_session_file() {
     printf '%s\n' "$1" >"$_tmp" && mv -f "$_tmp" "$_BW_SESSION_FILE" || { rm -f "$_tmp"; return 1; }
 }
 
+# ── 보관함 동기화 ─────────────────────────────────────────────────────────────
+# bw list·get 은 서버가 아니라 로컬 캐시만 읽고, bw unlock 은 동기화하지 않습니다(login·sync 때만 갱신).
+# 세션 키를 위 파일에 두고 다시 쓰므로 잠금 해제는 재시작 뒤 처음 한 번뿐이라, 웹·다른 PC 에서 바꾼 항목
+# (서버·DB 비밀번호, 새 항목)이 며칠씩 반영되지 않았습니다. 그래서 bw_ensure_session 이
+#   ● 잠금 해제·로그인 직후 → 항상 동기화
+#   ● 이미 풀려 있으면    → 마지막 동기화가 BW_SYNC_MAX_AGE(초, 기본 1시간)보다 오래됐을 때만
+# 동기화합니다. bw sync 는 약 5초 걸려 매번 하지 않습니다.
+# 마지막 동기화 시각은 `bw sync --last` 대신 세션 파일 옆 표시 파일의 수정 시각으로 봅니다
+# (bw 는 실행만으로 1초 넘게 걸려, 동기화가 필요 없을 때도 매번 늦어짐).
+# 동기화에 실패해도(네트워크 끊김 등) 저장된 목록으로 계속하도록 항상 0 을 반환합니다.
+BW_SYNC_MAX_AGE="${BW_SYNC_MAX_AGE:-3600}"
+_bw_sync_stamp() { printf '%s' "${_BW_SESSION_FILE}.synced"; }
+bw_sync_if_stale() {
+    local _max_age="${1:-$BW_SYNC_MAX_AGE}" _stamp _mtime
+    [ "${DT2_OFFLINE:-0}" = "1" ] && return 0
+    _stamp=$(_bw_sync_stamp)
+    if [ "$_max_age" -gt 0 ] 2>/dev/null && [ -f "$_stamp" ] && [ ! -L "$_stamp" ] && [ -O "$_stamp" ]; then
+        _mtime=$(stat -c %Y "$_stamp" 2>/dev/null || echo 0)
+        [ $(($(date +%s) - _mtime)) -lt "$_max_age" ] && return 0
+    fi
+    echo "🔄 Bitwarden 보관함 동기화 중..." >&2
+    if bw sync </dev/null >/dev/null 2>&1; then
+        # 남이 만든 파일·링크를 따라 쓰지 않도록 지우고 새로 만듦(세션 파일과 같은 폴더·권한)
+        rm -f "$_stamp" 2>/dev/null
+        (umask 077; : >"$_stamp") 2>/dev/null || true
+    else
+        echo "⚠️  동기화하지 못했습니다(네트워크 등). 저장된 목록으로 계속합니다." >&2
+    fi
+    return 0
+}
+
 # ── bw vault 잠금 해제 수행 ───────────────────────────────────────────────────
 _bw_do_unlock() {
     local _MASTER_PASS=""
@@ -338,6 +370,8 @@ except:
     print('unknown')
 ")
 
+    # 잠금 해제·로그인 직후면 항상, 아니면 오래됐을 때만 동기화(위 "보관함 동기화")
+    local _sync_age="$BW_SYNC_MAX_AGE"
     case "$_STATUS" in
     unauthenticated)
         echo "🔑 Bitwarden에 로그인되어 있지 않습니다."
@@ -349,10 +383,12 @@ except:
         ;;
     locked)
         _bw_do_unlock || return 1
+        _sync_age=0
         ;;
     unlocked)
         if [ -z "${BW_SESSION:-}" ]; then
             _bw_do_unlock || return 1
+            _sync_age=0
         fi
         ;;
     *)
@@ -361,6 +397,7 @@ except:
         ;;
     esac
 
+    bw_sync_if_stale "$_sync_age"
     return 0
 }
 
@@ -975,6 +1012,9 @@ bw_interactive_login() {
     BW_SESSION="$_out"
     export BW_SESSION
     _bw_write_session_file "$BW_SESSION" || echo "⚠️  세션 키를 파일에 저장하지 못했습니다(이번 실행에서만 유지): $_BW_SESSION_FILE" >&2
+    # bw login 이 방금 동기화했으므로 바로 뒤 bw_ensure_session 이 다시 동기화(약 5초)하지 않게 시각만 기록
+    rm -f "$(_bw_sync_stamp)" 2>/dev/null
+    (umask 077; : >"$(_bw_sync_stamp)") 2>/dev/null || true
     echo "✅ Bitwarden 로그인 완료 (${_email})"
     return 0
 }
