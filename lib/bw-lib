@@ -242,12 +242,13 @@ _bw_write_session_file() {
 # 세션 키를 위 파일에 두고 다시 쓰므로 잠금 해제는 재시작 뒤 처음 한 번뿐이라, 웹·다른 PC 에서 바꾼 항목
 # (서버·DB 비밀번호, 새 항목)이 며칠씩 반영되지 않았습니다. 그래서 bw_ensure_session 이
 #   ● 잠금 해제·로그인 직후 → 항상 동기화
-#   ● 이미 풀려 있으면    → 마지막 동기화가 BW_SYNC_MAX_AGE(초, 기본 1시간)보다 오래됐을 때만
-# 동기화합니다. bw sync 는 약 5초 걸려 매번 하지 않습니다.
+#   ● 이미 풀려 있으면    → 마지막 동기화가 BW_SYNC_MAX_AGE(초, 기본 15분)보다 오래됐을 때만
+# 동기화합니다. bw sync(--force 없이)는 서버의 마지막 변경 시각만 먼저 보고 바뀐 것이 있을 때만 받지만,
+# 변경이 없어도 bw 실행 비용으로 약 1.5초(변경이 있으면 3~5초) 걸려 매번 하지 않습니다.
 # 마지막 동기화 시각은 `bw sync --last` 대신 세션 파일 옆 표시 파일의 수정 시각으로 봅니다
 # (bw 는 실행만으로 1초 넘게 걸려, 동기화가 필요 없을 때도 매번 늦어짐).
 # 동기화에 실패해도(네트워크 끊김 등) 저장된 목록으로 계속하도록 항상 0 을 반환합니다.
-BW_SYNC_MAX_AGE="${BW_SYNC_MAX_AGE:-3600}"
+BW_SYNC_MAX_AGE="${BW_SYNC_MAX_AGE:-900}"
 _bw_sync_stamp() { printf '%s' "${_BW_SESSION_FILE}.synced"; }
 bw_sync_if_stale() {
     local _max_age="${1:-$BW_SYNC_MAX_AGE}" _stamp _mtime
@@ -1012,7 +1013,7 @@ bw_interactive_login() {
     BW_SESSION="$_out"
     export BW_SESSION
     _bw_write_session_file "$BW_SESSION" || echo "⚠️  세션 키를 파일에 저장하지 못했습니다(이번 실행에서만 유지): $_BW_SESSION_FILE" >&2
-    # bw login 이 방금 동기화했으므로 바로 뒤 bw_ensure_session 이 다시 동기화(약 5초)하지 않게 시각만 기록
+    # bw login 이 방금 동기화했으므로 바로 뒤 bw_ensure_session 이 다시 동기화(약 1.5초)하지 않게 시각만 기록
     rm -f "$(_bw_sync_stamp)" 2>/dev/null
     (umask 077; : >"$(_bw_sync_stamp)") 2>/dev/null || true
     echo "✅ Bitwarden 로그인 완료 (${_email})"
