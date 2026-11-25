@@ -13,6 +13,7 @@
 #   bw_get_folder_ids            → 폴더명으로 일치하는 모든 폴더 ID 목록 반환
 #   bw_get_items_by_folder_name  → 폴더명으로 아이템 JSON 청크 목록 반환
 #   bw_get_items_by_folder_ids   → 폴더 ID 목록(bw_get_folder_ids 결과)으로 아이템 JSON 청크 목록 반환
+#   bw_raw_item_field            → 위 목록(표준 입력)에서 항목 ID 의 password·notes 꺼내기 (bw get 대신)
 #   bw_find_item_by_name         → 이름이 정확히 일치하는 아이템 JSON 반환
 #                                  (일치 항목이 없으면 빈 출력, 2개 이상이면 종료코드 3)
 #   bw_find_item_live            → 아이템 이름으로 실시간 조회(bw list items) + 파싱을 한 번에 수행
@@ -489,6 +490,33 @@ bw_get_items_by_folder_ids() {
     done
 
     printf "%s" "$_RAW"
+}
+
+# ── 받아 둔 목록에서 항목의 비밀번호·메모 꺼내기 ──────────────────────────────
+# bw list items 결과에는 비밀번호·메모가 이미 들어 있으므로, 목록을 받은 뒤 bw get password/notes 를 따로 부르지 않는다
+# (bw 실행마다 0.6~1.4초씩 늘었음 — Node 실행 비용, 캐시 조회 자체는 빠름).
+# 목록은 명령 인자가 아니라 표준 입력으로만 받는다(ps 등으로 보이지 않게). 항목 ID·필드 이름은 비밀이 아니다.
+# 사용법: printf '%s' "$RAW_ITEMS_LIST" | bw_raw_item_field <항목ID> <password|notes>
+# 입력: bw_get_items_by_folder_ids/_name 의 출력(---ITEM_SPLIT--- 구분 JSON 청크)
+# 출력: 값(끝 줄바꿈 없음), 항목이 없거나 값이 비었으면 빈 출력
+bw_raw_item_field() {
+    python3 -c '
+import sys, json
+item_id, field = sys.argv[1], sys.argv[2]
+for chunk in sys.stdin.read().split("---ITEM_SPLIT---"):
+    s, e = chunk.find("["), chunk.rfind("]")
+    if s == -1 or e <= s:
+        continue
+    try:
+        items = json.loads(chunk[s:e+1], strict=False)
+    except Exception:
+        continue
+    for it in items if isinstance(items, list) else []:
+        if isinstance(it, dict) and it.get("id") == item_id:
+            v = (it.get("login") or {}).get("password") if field == "password" else it.get("notes")
+            sys.stdout.write(v or "")
+            sys.exit(0)
+' "$1" "$2" 2>/dev/null
 }
 
 # ── 이름이 정확히 일치하는 아이템의 필드를 추출 ───────────────────────────────
