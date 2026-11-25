@@ -5,7 +5,7 @@ Bitwarden 에 저장한 GitHub 계정으로 비공개 저장소를 받은 뒤, �
 
 ## 설치
 
-Windows (WSL2 까지 한 번에 — Windows PowerShell 에서):
+Windows (WSL 까지 한 번에 — Windows PowerShell 에서):
 
 ```powershell
 irm https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.ps1 | iex
@@ -58,7 +58,7 @@ curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/insta
 
 | 경로 | 내용 |
 |---|---|
-| `install.ps1` | 시작 스크립트 (Windows) — 관리자 승격, WSL2 기능·엔진, devtools2 배포판 만들기, WSL 안에서 `install.sh`(clone 까지), 이어서 clone 한 저장소의 Windows 설치 스크립트 실행 |
+| `install.ps1` | 시작 스크립트 (Windows) — 관리자 승격, WSL 기능·엔진, devtools2 배포판 만들기, WSL 안에서 `install.sh`(clone 까지), 이어서 clone 한 저장소의 Windows 설치 스크립트 실행 |
 | `install.sh` | 시작 스크립트 (WSL·리눅스) — Bitwarden 로그인, `_devtools2` clone, 설치 스크립트 실행 |
 | `lib/ui.ps1` | Windows 출력·질문·스피너·다운로드·관리자 승격 공용 함수 — _devtools2 의 `_common.ps1` 도 이 파일을 씀 |
 | `lib/ui-lib` | 색·출력·질문 공용 함수 — _devtools2 의 `_common.sh` 도 이 파일을 씀 |

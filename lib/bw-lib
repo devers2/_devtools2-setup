@@ -850,7 +850,7 @@ bw_save_git_credentials() {
     _bw_trap_restore
     echo "✅ PAT 가 ~/.git-credentials 에 저장되었습니다. (host: $_cred_host)"
 
-    # ── WSL2 환경: Windows 홈의 .git-credentials 에 남은 예전 사본 안내 ──────────
+    # ── WSL 환경: Windows 홈의 .git-credentials 에 남은 예전 사본 안내 ──────────
     # 예전에는 Windows 판 Sublime Merge(시스템 git.exe 의 credential.helper=store)가 같은 PAT 로
     # 인증하도록 Windows 홈의 .git-credentials 에도 PAT 평문을 복사했습니다.
     # Sublime Merge 를 WSLg 기반 Linux 판으로 바꾼 뒤로는 쓰는 곳이 없어 복사를 그만두었습니다

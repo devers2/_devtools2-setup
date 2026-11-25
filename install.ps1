@@ -1,10 +1,10 @@
 # ==============================================================================
-# DevTools2 설치 시작 스크립트 (Windows + WSL2)
+# DevTools2 설치 시작 스크립트 (Windows + WSL)
 #   irm https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.ps1 | iex
 # ==============================================================================
 # 하는 일
 #   1) 관리자 권한으로 다시 실행 (UAC)
-#   2) WSL2 에 필요한 Windows 기능 켜기 (처음이면 재시작 후 같은 명령을 다시 실행)
+#   2) WSL 에 필요한 Windows 기능 켜기 (처음이면 재시작 후 같은 명령을 다시 실행)
 #   3) WSL 엔진 설치·업데이트, devtools2 전용 배포판 만들기 (Canonical rootfs 를 wsl --import — 다른 배포판은 건드리지 않음)
 #   4) 배포판 안에서 install.sh 로 Bitwarden 로그인 → 비공개 _devtools2 를 /var/opt/_devtools2 로 clone
 #   5) clone 한 저장소의 Windows 설치 스크립트(scripts/windows/setup-devtools2-wsl.ps1)를 실행
@@ -151,11 +151,11 @@ if (-not (Confirm-ElevatedUserMatchesDesktop)) { return }
 Clear-Host
 Write-Host ""
 Write-Host "===========================================================================" -ForegroundColor DarkCyan
-Write-Host "🌟 DevTools2 설치 시작 (Windows + WSL2)" -ForegroundColor DarkCyan
+Write-Host "🌟 DevTools2 설치 시작 (Windows + WSL)" -ForegroundColor DarkCyan
 Write-Host "===========================================================================" -ForegroundColor DarkCyan
 
 # ==============================================================================
-# [Step 0-1] 순정 Windows 감지: WSL2 필수 선택적 기능 활성화 및 점검
+# [Step 0-1] 순정 Windows 감지: WSL 필수 선택적 기능 활성화 및 점검
 # ==============================================================================
 $_wslResumeFlagFile = "$env:TEMP\.devtools2_wsl_resume"
 
@@ -201,7 +201,7 @@ function Request-RestartForWslFeatures {
     }
 }
 
-# WSL2 엔진 고속 작동 확인 (이미 설치 및 정상 작동 중이면 0.03초 만에 즉시 통과)
+# WSL 엔진 고속 작동 확인 (이미 설치 및 정상 작동 중이면 0.03초 만에 즉시 통과)
 # 이 확인은 WSL 이 아직 없거나 인박스 상태인 첫 설치에서도 실행되므로, 아래 wsl --version 과 같은 이유로 타임아웃을 둡니다
 # (그런 환경에서 wsl 명령이 무한 대기할 수 있음 — 예전에는 여기서 그대로 멈출 수 있었음). 시간이 지나면 "동작 안 함"으로 보고
 # 아래 기능 점검으로 넘어갑니다.
@@ -227,7 +227,7 @@ if ($wslWorking) {
     $wslFeatEnabled = $true
     $vmFeatEnabled  = $true
 } else {
-    Write-Info "WSL2 환경 및 Windows 필수 기능 점검 중..."
+    Write-Info "WSL 환경 및 Windows 필수 기능 점검 중..."
     $wslFeatEnabled = Get-IsFeatureEnabled "Microsoft-Windows-Subsystem-Linux"
     $vmFeatEnabled  = Get-IsFeatureEnabled "VirtualMachinePlatform"
 }
@@ -247,8 +247,8 @@ if ((Test-Path $_wslResumeFlagFile) -and -not ($wslFeatEnabled -and $vmFeatEnabl
 
 # 필수 선택적 기능 중 하나라도 비활성화되어 있고 재개 플래그도 없는 경우 활성화 수행
 if (-not ($wslFeatEnabled -and $vmFeatEnabled) -and -not (Test-Path $_wslResumeFlagFile)) {
-    Write-Step "[Step 0-1] WSL2 필수 선택적 기능 활성화"
-    Write-Warn "WSL2 실행에 필요한 Windows 선택적 기능이 비활성화되어 있습니다."
+    Write-Step "[Step 0-1] WSL 필수 선택적 기능 활성화"
+    Write-Warn "WSL 실행에 필요한 Windows 선택적 기능이 비활성화되어 있습니다."
     Write-Info "선택적 기능(VirtualMachinePlatform 및 Microsoft-Windows-Subsystem-Linux)을 활성화합니다..."
 
     # 기능 켜기 결과를 확인한다(-ErrorAction Stop → 실패하면 자식 PowerShell 종료 코드가 0 이 아님).
@@ -270,18 +270,18 @@ if (-not ($wslFeatEnabled -and $vmFeatEnabled) -and -not (Test-Path $_wslResumeF
         Exit-Devtools2Setup 1
     }
 
-    # wsl --install 로 WSL2 커널 및 기본 컴포넌트 설치 (배포판 없이)
+    # wsl --install 로 WSL 커널 및 기본 컴포넌트 설치 (배포판 없이)
     $pKernel = Start-Process wsl.exe -ArgumentList "--install --no-distribution" -PassThru -NoNewWindow -RedirectStandardOutput "$env:TEMP\wsl_kernel_install.txt" -ErrorAction SilentlyContinue
-    Wait-WithSpinner -Message "WSL2 커널 컴포넌트 확인/설치" -Condition { $pKernel.HasExited }
+    Wait-WithSpinner -Message "WSL 커널 컴포넌트 확인/설치" -Condition { $pKernel.HasExited }
     Remove-Item "$env:TEMP\wsl_kernel_install.txt" -Force -ErrorAction SilentlyContinue
 
     Write-Host ""
     Write-Host "===========================================================================" -ForegroundColor Yellow
-    Write-Host "  ✅ WSL2 필수 선택적 기능 활성화 완료!" -ForegroundColor Green
+    Write-Host "  ✅ WSL 필수 선택적 기능 활성화 완료!" -ForegroundColor Green
     Write-Host "  🔄 변경 사항을 적용하려면 Windows를 재시작해야 합니다." -ForegroundColor Yellow
     Write-Host "===========================================================================" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "  재시작 후 이 스크립트를 다시 실행하면 WSL2 배포판 설치부터 자동으로 이어서 진행됩니다." -ForegroundColor White
+    Write-Host "  재시작 후 이 스크립트를 다시 실행하면 WSL 배포판 설치부터 자동으로 이어서 진행됩니다." -ForegroundColor White
     Write-Host ""
 
     # 재개 플래그 파일 저장 (재시작 후 이어서 진행하기 위해, UTF-8 NoBOM 보장)
@@ -292,10 +292,10 @@ if (-not ($wslFeatEnabled -and $vmFeatEnabled) -and -not (Test-Path $_wslResumeF
 
 # 재개 플래그가 있으면 이전 실행에서 WSL 기능을 설치하고 재부팅한 것이므로 바로 진행
 if (Test-Path $_wslResumeFlagFile) {
-    Write-Info "재시작 후 설치 재개 감지. WSL2 배포판 설치를 이어서 진행합니다."
+    Write-Info "재시작 후 설치 재개 감지. WSL 배포판 설치를 이어서 진행합니다."
     Remove-Item $_wslResumeFlagFile -Force -ErrorAction SilentlyContinue
 
-    # WSL2를 기본 버전으로 설정
+    # WSL를 기본 버전으로 설정
     wsl --set-default-version 2 2>$null | Out-Null
 }
 
@@ -341,7 +341,7 @@ function Show-BiosVirtualizationHelp {
     Write-Host "===========================================================================" -ForegroundColor Red
     Write-Host "  ❌ 메인보드(BIOS/UEFI) 가상화(Virtualization) 비활성화 오류" -ForegroundColor Red
     Write-Host "===========================================================================" -ForegroundColor Red
-    Write-Host "  WSL2 가상 머신을 실행하려면 CPU 가상화 기능(VT-x / AMD-V)이" -ForegroundColor Yellow
+    Write-Host "  WSL 가상 머신을 실행하려면 CPU 가상화 기능(VT-x / AMD-V)이" -ForegroundColor Yellow
     Write-Host "  BIOS/UEFI 설정에서 활성화되어 있어야 합니다." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "  [BIOS/UEFI 가상화 활성화 방법 안내]" -ForegroundColor White
@@ -422,9 +422,9 @@ function ConvertTo-WslVersion {
 $wslName = "devtools2"
 
 # ==============================================================================
-# [Step 1] WSL2 가상 머신 상태 확인 및 설치 진행
+# [Step 1] WSL 가상 머신 상태 확인 및 설치 진행
 # ==============================================================================
-Write-Step "[Step 1] WSL2 가상 머신 상태 확인"
+Write-Step "[Step 1] WSL 가상 머신 상태 확인"
 
 # 1. wsl.exe 파일 존재 확인 (구형 Windows 대응)
 $wslExePath = "$env:SystemRoot\System32\wsl.exe"
@@ -433,7 +433,7 @@ if (-not (Test-Path $wslExePath)) {
     Write-Host "===========================================================================" -ForegroundColor Red
     Write-Host "  ❌ wsl.exe 를 찾을 수 없습니다." -ForegroundColor Red
     Write-Host "===========================================================================" -ForegroundColor Red
-    Write-Host "  WSL2 설치에는 Windows 10 버전 2004 이상 또는 Windows 11 이 필요합니다." -ForegroundColor Yellow
+    Write-Host "  WSL 설치에는 Windows 10 버전 2004 이상 또는 Windows 11 이 필요합니다." -ForegroundColor Yellow
     Write-Host "  Windows 업데이트를 실행한 후 이 스크립트를 다시 실행해 주세요." -ForegroundColor Yellow
     Write-Host "===========================================================================" -ForegroundColor Red
     Pause-Script
@@ -472,7 +472,7 @@ if (Test-Path "$env:TEMP\wsl_version_error.txt") { Remove-Item "$env:TEMP\wsl_ve
 
 # 3. WSL 엔진 미설치 → wsl --install --no-distribution 으로 설치
 if (-not $isWslEngineInstalled) {
-    Write-Warn "WSL2 구성 요소가 설치되어 있지 않거나 반응하지 않습니다. 설치를 진행합니다..."
+    Write-Warn "WSL 구성 요소가 설치되어 있지 않거나 반응하지 않습니다. 설치를 진행합니다..."
     # stderr를 캡처해두는 이유: 아래에서 실패 원인이 실제로 BIOS/UEFI 가상화 비활성화인지,
     # 아니면 네트워크/Windows Update 등 다른 이유인지 구분해야 하기 때문입니다.
     #   (wsl.exe 는 오류를 stdout 으로도 내므로 두 파일을 함께 받아 Read-WslOutputFile 로 읽습니다)
@@ -489,7 +489,7 @@ if (-not $isWslEngineInstalled) {
         Exit-WslSetup 1
     }
 
-    $waitSuccess = Wait-WithSpinner -Message "WSL2 구성 요소 다운로드 및 기능 활성화 진행 중" -Condition {
+    $waitSuccess = Wait-WithSpinner -Message "WSL 구성 요소 다운로드 및 기능 활성화 진행 중" -Condition {
         return $installProc.HasExited
     } -MaxTimeoutSeconds 900
 
@@ -499,7 +499,7 @@ if (-not $isWslEngineInstalled) {
     # false가 되어, 설치가 실제로 끝나지도 않았는데 아무 경고 없이 다음 단계로
     # 넘어가 버립니다. 타임아웃을 명시적으로 처리합니다.
     if (-not $waitSuccess) {
-        Write-Fail "WSL2 설치가 제한 시간(900초) 내에 완료되지 않았습니다."
+        Write-Fail "WSL 설치가 제한 시간(900초) 내에 완료되지 않았습니다."
         Write-Warn "설치가 백그라운드에서 계속 진행 중일 수 있습니다. 잠시 기다린 후 이 스크립트를 다시 실행해 주세요."
         Pause-Script
         Exit-WslSetup 1
@@ -511,7 +511,7 @@ if (-not $isWslEngineInstalled) {
     if ($installProc.ExitCode -eq 3010) {
         Write-Host ""
         Write-Host "===========================================================================" -ForegroundColor Red
-        Write-Host "  ⚠️  WSL2 설치를 완료하기 위해 시스템 재부팅이 필요합니다." -ForegroundColor Red
+        Write-Host "  ⚠️  WSL 설치를 완료하기 위해 시스템 재부팅이 필요합니다." -ForegroundColor Red
         Write-Host "===========================================================================" -ForegroundColor Red
         Write-Host "  컴퓨터를 재부팅한 후 이 스크립트를 다시 실행해 주세요." -ForegroundColor Yellow
         Write-Host "===========================================================================" -ForegroundColor Red
@@ -525,7 +525,7 @@ if (-not $isWslEngineInstalled) {
     # 실제 설치 상태 확인 단계로 넘겨 판단합니다.
     # (원인은 Handle 미선점이었습니다 — 위에서 Handle 을 미리 열어 대부분 막지만, 방어용으로 이 처리는 유지합니다)
     elseif ($null -ne $installProc.ExitCode -and $installProc.ExitCode -ne 0) {
-        Write-Fail "WSL2 설치가 실패했습니다. (종료 코드: $($installProc.ExitCode))"
+        Write-Fail "WSL 설치가 실패했습니다. (종료 코드: $($installProc.ExitCode))"
         if (-not [string]::IsNullOrWhiteSpace($installErrContent)) {
             Write-Host "  [상세 오류 메시지]" -ForegroundColor Yellow
             Write-Host "  $($installErrContent.Trim())" -ForegroundColor Gray
@@ -555,7 +555,7 @@ $listProc = Start-Process wsl.exe -ArgumentList "--list --quiet" -PassThru -NoNe
     -RedirectStandardError "$env:TEMP\wsl_list_error.txt" `
     -ErrorAction SilentlyContinue
 
-Wait-WithSpinner -Message "WSL2 배포판 목록 확인 중" -Condition {
+Wait-WithSpinner -Message "WSL 배포판 목록 확인 중" -Condition {
     return (-not $listProc) -or $listProc.HasExited
 } -MaxTimeoutSeconds 5 | Out-Null
 
@@ -724,7 +724,7 @@ if ($registeredDistros -contains $wslName) {
     Remove-Item $confOutFile, "$confOutFile.err" -Force -ErrorAction SilentlyContinue
 
     if ($hasDefaultUser) {
-        Write-Success "기존에 설치된 WSL2 배포판 '$wslName'이 이미 존재하여 이를 그대로 사용합니다."
+        Write-Success "기존에 설치된 WSL 배포판 '$wslName'이 이미 존재하여 이를 그대로 사용합니다."
         Write-Warn "---------------------------------------------------------------------------"
         Write-Warn " [새로운 배포판으로 깨끗하게 다시 설치하고 싶으신가요?]"
         Write-Warn " 아래 명령어를 실행하여 기존 배포판을 완전히 삭제한 뒤, 이 스크립트를 다시 실행해 주세요."
@@ -786,7 +786,7 @@ function Install-NewDevtools2Distro {
     # 파일 충돌 방지를 위해 경로에 Windows 계정명($env:USERNAME)을 포함합니다.
     # (배포판 이름 'devtools2'는 고정 유지 - WSL 등록은 사용자별로 독립적)
     # ==============================================================================
-    Write-Step "[Step 2] WSL2 가상 머신 설치 경로 결정"
+    Write-Step "[Step 2] WSL 가상 머신 설치 경로 결정"
 
     $windowsUser = $env:USERNAME.ToLower()
 
@@ -811,10 +811,10 @@ function Install-NewDevtools2Distro {
 
     Write-Host ""
     Write-Host "===========================================================================" -ForegroundColor DarkCyan
-    Write-Host "  📂 WSL2 가상 머신 설치 드라이브 선택" -ForegroundColor DarkCyan
+    Write-Host "  📂 WSL 가상 머신 설치 드라이브 선택" -ForegroundColor DarkCyan
     Write-Host "===========================================================================" -ForegroundColor DarkCyan
     Write-Host ""
-    Write-Host "  💡 개발자 드라이브(Dev Drive / ReFS)에 설치하면 WSL2 파일 I/O 성능이" -ForegroundColor Yellow
+    Write-Host "  💡 개발자 드라이브(Dev Drive / ReFS)에 설치하면 WSL 파일 I/O 성능이" -ForegroundColor Yellow
     Write-Host "     크게 향상됩니다. 가능하다면 개발자 드라이브를 선택하는 것을 권장합니다." -ForegroundColor Yellow
     Write-Host ""
 
@@ -845,7 +845,7 @@ function Install-NewDevtools2Distro {
 
     Write-Host ""
     Write-Success "선택 완료: $selectedLabel"
-    Write-Info    "WSL2 가상 머신 설치 경로: $wslInstallPath"
+    Write-Info    "WSL 가상 머신 설치 경로: $wslInstallPath"
     Write-Host ""
 
     # ==============================================================================
@@ -863,7 +863,7 @@ function Install-NewDevtools2Distro {
 
     if (Test-Path $existingVhdx) {
         Write-Host ""
-        Write-Success "지정된 경로에 기존 WSL2 가상 디스크(ext4.vhdx)가 발견되었습니다:"
+        Write-Success "지정된 경로에 기존 WSL 가상 디스크(ext4.vhdx)가 발견되었습니다:"
         Write-Host "   $existingVhdx" -ForegroundColor Cyan
         Write-Host ""
         $useExisting = Prompt-Confirm "기존 가상 디스크를 '$wslName' 배포판으로 즉시 재등록하여 사용하시겠습니까?" "Y"
@@ -891,7 +891,7 @@ function Install-NewDevtools2Distro {
             Write-Info "기존 ext4.vhdx 는 그대로 두고, 새 배포판은 다른 폴더에 설치할 수 있습니다: $altInstallPath"
             if (Prompt-Confirm "새 폴더에 설치하시겠습니까? (N: 중단 — 기존 파일을 정리한 뒤 다시 실행)" "Y") {
                 $wslInstallPath = $altInstallPath
-                Write-Info "WSL2 가상 머신 설치 경로: $wslInstallPath"
+                Write-Info "WSL 가상 머신 설치 경로: $wslInstallPath"
             } else {
                 Write-Info "중단합니다. 기존 가상 디스크가 필요 없다면 백업·삭제한 뒤 다시 실행해 주세요:"
                 Write-Host "    $existingVhdx" -ForegroundColor Gray
@@ -1038,9 +1038,9 @@ function Install-NewDevtools2Distro {
         $installedDistroDesc = "Ubuntu $ubuntuVer LTS ($ubuntuCodename)"
         Write-Info "선택된 Ubuntu 버전: $installedDistroDesc"
 
-        # ── 2. WSL2 내부 기본 사용자 계정 및 비밀번호 설정 ─────────────────────
-        Write-Step "[Step 3-2] WSL2 기본 사용자 계정 설정"
-        Write-Host "  WSL2 내부에서 사용할 기본 사용자 계정과 비밀번호를 설정합니다." -ForegroundColor White
+        # ── 2. WSL 내부 기본 사용자 계정 및 비밀번호 설정 ─────────────────────
+        Write-Step "[Step 3-2] WSL 기본 사용자 계정 설정"
+        Write-Host "  WSL 내부에서 사용할 기본 사용자 계정과 비밀번호를 설정합니다." -ForegroundColor White
         $createdUsername = ""
         while ([string]::IsNullOrEmpty($createdUsername)) {
             Write-Host "👉 사용자 이름(Username) 입력 [기본값: $windowsUser]: " -ForegroundColor Yellow -NoNewline
@@ -1153,8 +1153,8 @@ function Install-NewDevtools2Distro {
             }
         }
 
-        # ── 4. 지정 경로에 WSL2 배포판 직접 Import ─────────────────────────────
-        Write-Step "[Step 3-4] WSL2 배포판 직접 생성 (wsl --import)"
+        # ── 4. 지정 경로에 WSL 배포판 직접 Import ─────────────────────────────
+        Write-Step "[Step 3-4] WSL 배포판 직접 생성 (wsl --import)"
         if (-not (Test-Path $wslInstallPath)) {
             New-Item -ItemType Directory -Path $wslInstallPath -Force | Out-Null
         }
@@ -1180,14 +1180,14 @@ function Install-NewDevtools2Distro {
             $importReadTasks += $importProc.StandardOutput.BaseStream.CopyToAsync($importOutBuf)
             $importReadTasks += $importProc.StandardError.BaseStream.CopyToAsync($importErrBuf)
         }
-        $importWait = Wait-WithSpinner -Message "WSL2 배포판 가상 디스크 생성 및 Import 중" -Condition {
+        $importWait = Wait-WithSpinner -Message "WSL 배포판 가상 디스크 생성 및 Import 중" -Condition {
             return ($null -eq $importProc) -or $importProc.HasExited
         } -MaxTimeoutSeconds 600
         if (-not $importWait -and $importProc) {
             # 600초는 안내 기준일 뿐입니다 — 느린 디스크·백신 검사 중이면 더 걸릴 수 있습니다.
             #   예전에는 여기서 아무 표시 없이 WaitForExit() 로 기다렸다가, 끝내 성공해도 "시간 초과"라 실패로 판정했습니다.
             Write-Warn "배포판 가져오기가 600초를 넘겼지만 아직 진행 중입니다. 끝날 때까지 계속 기다립니다(멈춘 것 같으면 Ctrl+C 로 중단)."
-            $importWait = Wait-WithSpinner -Message "WSL2 배포판 가져오기 계속 대기 중" -Condition {
+            $importWait = Wait-WithSpinner -Message "WSL 배포판 가져오기 계속 대기 중" -Condition {
                 return $importProc.HasExited
             } -MaxTimeoutSeconds ([int]::MaxValue)
         }
@@ -1225,7 +1225,7 @@ function Install-NewDevtools2Distro {
             Pause-Script
             Exit-WslSetup 1
         }
-        Write-Success "WSL2 배포판 '$wslName' 생성 완료!"
+        Write-Success "WSL 배포판 '$wslName' 생성 완료!"
 
         # ── 5. 기본 계정 생성 및 시스템 설정 초기화 (root 권한 1회 설정) ─────────
         Write-Step "[Step 3-5] 기본 계정 및 시스템 환경 구성"
@@ -1312,7 +1312,7 @@ EOF
         # 3) Windows Interop 핸들러 등록
         Register-WslInterop $wslName
 
-        Write-Success "WSL2 시스템 환경 및 사용자($createdUsername) 구성 완료!"
+        Write-Success "WSL 시스템 환경 및 사용자($createdUsername) 구성 완료!"
 
         # 4) /etc/wsl.conf 의 [user] default=$createdUsername 및 systemd 설정을 즉시 적용하기 위해 배포판 종료(terminate)
         wsl --terminate $wslName 2>$null
@@ -1331,7 +1331,7 @@ if ($isNewDistroInstall) {
 if ($isNewDistroInstall) {
 Write-Host ""
 Write-Host "===========================================================================" -ForegroundColor DarkCyan
-Write-Host "🎉 WSL2 설치 및 환경 설정 완료!" -ForegroundColor Green
+Write-Host "🎉 WSL 설치 및 환경 설정 완료!" -ForegroundColor Green
 Write-Host ""
 Write-Host "  설치된 배포판 : $installedDistroDesc" -ForegroundColor White
 Write-Host "  인스턴스 이름 : $wslName" -ForegroundColor White
