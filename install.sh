@@ -66,8 +66,8 @@ _cleanup() {
     if [ "$KEEP" = n ] && [ -n "$WORK" ] && [ -d "$WORK/bw-data" ] && command -v bw >/dev/null 2>&1; then
         BITWARDENCLI_APPDATA_DIR="$WORK/bw-data" bw logout >/dev/null 2>&1 || true
     fi
-    BW_GH_PAT="" BW_GH_USER="" BW_GH_EMAIL="" BW_SESSION=""
-    unset BW_GH_PAT BW_SESSION BITWARDENCLI_APPDATA_DIR
+    BW_GH_PAT="" BW_GH_OWNER_PATS="" BW_GH_USER="" BW_GH_EMAIL="" BW_SESSION=""
+    unset BW_GH_PAT BW_GH_OWNER_PATS BW_SESSION BITWARDENCLI_APPDATA_DIR
     if [ -n "$WORK" ] && [ -d "$WORK" ]; then
         rm -rf -- "$WORK"
     fi
@@ -146,7 +146,8 @@ ACC_STATE="" ACC_USER="" ACC_LOGIN=""
 _detect_account() {
     local _pw _rc=0
     ACC_LOGIN=""
-    if ! bw_read_stored_github_credential github.com; then
+    # 저장소 주소로 읽음 — 이 저장소 주인 전용 PAT(PAT_<주인>, bw_save_owner_git_credentials)가 저장돼 있으면 그것을 확인
+    if ! bw_read_stored_github_credential "$DT2_REPO_URL"; then
         ACC_STATE=none ACC_USER=""
         return 0
     fi
@@ -345,7 +346,8 @@ _prepare_account() {
 #   git -c 값은 저장소 설정에 남지 않습니다. PAT 는 명령 인자에 나타나지 않습니다.
 _git() {
     if [ "$KEEP" = n ]; then
-        DT2_GH_USER="$BW_GH_USER" DT2_GH_PAT="$BW_GH_PAT" GIT_TERMINAL_PROMPT=0 git \
+        # PAT: 이 저장소 주인의 PAT_<주인> 이 있으면 그것, 없으면 기본 PAT (bw_pick_pat)
+        DT2_GH_USER="$BW_GH_USER" DT2_GH_PAT="$(bw_pick_pat "$DT2_REPO_URL" "$BW_GH_PAT" "${BW_GH_OWNER_PATS:-}")" GIT_TERMINAL_PROMPT=0 git \
             -c credential.helper= \
             -c 'credential.helper=!f() { [ "$1" = get ] || exit 0; printf "username=%s\npassword=%s\n" "$DT2_GH_USER" "$DT2_GH_PAT"; }; f' \
             "$@"
