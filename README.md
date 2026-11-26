@@ -1,6 +1,6 @@
 # _devtools2-setup
 
-개인 개발 환경 [DevTools2](https://github.com/devers2/_devtools2)(비공개)를 설치하는 **공개 시작 저장소**입니다.
+개인 개발 환경 [DevTools2](https://github.com/devershq/_devtools2)(비공개)를 설치하는 **공개 시작 저장소**입니다.
 Bitwarden 에 저장한 GitHub 계정으로 비공개 저장소를 받은 뒤, 그 안의 설치 스크립트를 실행합니다.
 
 ## 설치
@@ -8,19 +8,19 @@ Bitwarden 에 저장한 GitHub 계정으로 비공개 저장소를 받은 뒤, �
 Windows (WSL 까지 한 번에 — Windows PowerShell 에서):
 
 ```powershell
-irm https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/devershq/_devtools2-setup/main/install.ps1 | iex
 ```
 
 WSL·리눅스:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/devershq/_devtools2-setup/main/install.sh | bash
 ```
 
 설치 스크립트가 중간에 실패했을 때 (내 PC — AI 로 바로 고치기):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.sh | bash -s -- --ai
+curl -fsSL https://raw.githubusercontent.com/devershq/_devtools2-setup/main/install.sh | bash -s -- --ai
 ```
 
 전체 설치 대신 계정 확인 → DevTools2 받기 → AI 에이전트 CLI 설치 → AI 공통 설정(agent-notes 받기·규칙 적용)까지만 하고 끝냅니다.
@@ -71,7 +71,7 @@ curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/insta
 ## s2-office-converter (서버 설치)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh | bash
+curl -fsSL https://raw.githubusercontent.com/devershq/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh | bash
 ```
 
 사용법은 [s2-office-converter/README.md](s2-office-converter/README.md) 를 보십시오.

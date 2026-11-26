@@ -8,13 +8,13 @@
 # [실행 방법] s2-docflow 를 쓰는 앱과 같은 서버에서, sudo 를 쓸 수 있는 계정으로 실행합니다.
 #             이 파일 하나만으로 동작하므로 저장소를 받을 필요 없이 GitHub 에서 바로 실행하면 됩니다.
 #
-#   주소: https://raw.githubusercontent.com/devers2/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh
+#   주소: https://raw.githubusercontent.com/devershq/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh
 #
 #   # 1) 운영 서버 (온라인) — 앱 실행 계정을 지정해 설치 (appuser 자리에 실제 계정 이름)
-#   curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh | bash -s -- --app-user appuser
+#   curl -fsSL https://raw.githubusercontent.com/devershq/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh | bash -s -- --app-user appuser
 #
 #   # 2) 개발 PC, WSL (온라인) — 지금 로그인한 계정으로 설치
-#   curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/devershq/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh | bash
 #
 #   # 3) 폐쇄망 서버 — 인터넷 되는 PC에서 설치 파일 하나를 만들어 옮긴 뒤 실행
 #   #    (인터넷 되는 PC, 서버와 같은 CPU 종류) 서버 배포판·버전을 --target 으로 지정
@@ -126,7 +126,7 @@ SERVER_CACHE="/var/cache/s2-docflow"
 SERVER_JAR_ARCHIVE="s2-docflow-server.jar"
 SCRIPT_NAME="setup-s2-office-converter.sh"
 # 공개 배포 위치(s2-docflow CI 가 복사). S2_CONVERTER_REF 로 다른 브랜치·커밋을 받을 수 있음 (예전 이름 DT2_REF 도 받음)
-SCRIPT_URL="https://raw.githubusercontent.com/devers2/_devtools2-setup/${S2_CONVERTER_REF:-${DT2_REF:-main}}/s2-office-converter/${SCRIPT_NAME}"
+SCRIPT_URL="https://raw.githubusercontent.com/devershq/_devtools2-setup/${S2_CONVERTER_REF:-${DT2_REF:-main}}/s2-office-converter/${SCRIPT_NAME}"
 VERSIONS_NAME="s2-office-converter-versions.toml"
 VERSIONS_URL="${SCRIPT_URL%/*}/${VERSIONS_NAME}"
 # Chosen in select_versions (install, export) or read from the bundle (offline) | select_versions 또는 설치 파일에서 정함

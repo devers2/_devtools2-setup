@@ -40,7 +40,7 @@ s2-docflow 의 `S2OfficeConverter`·`S2DocumentMerger` 가 **오피스·한글 �
 
 ## 사용법
 
-주소: `https://raw.githubusercontent.com/devers2/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh`
+주소: `https://raw.githubusercontent.com/devershq/_devtools2-setup/main/s2-office-converter/setup-s2-office-converter.sh`
 
 ### 1. 온라인 설치 (서버가 인터넷에 접속할 수 있을 때)
 

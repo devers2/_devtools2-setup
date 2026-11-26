@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # DevTools2 설치 시작 스크립트 (WSL·리눅스)
-#   curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/devershq/_devtools2-setup/main/install.sh | bash
 # ==============================================================================
 # 하는 일
 #   1) Bitwarden CLI(bw)를 임시 폴더에 받음 (GitHub 릴리스, SHA-256 확인)
@@ -10,7 +10,7 @@
 #   4) 그 안의 scripts/linux/setup-devtools2.sh 실행
 #
 # --ai: AI 로 고치기 위한 최소 준비만 (전체 설치는 하지 않음)
-#   curl -fsSL https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.sh | bash -s -- --ai
+#   curl -fsSL https://raw.githubusercontent.com/devershq/_devtools2-setup/main/install.sh | bash -s -- --ai
 #   설치 스크립트가 중간에 실패한 내 PC 에서 AI 로 바로 고치기 위한 모드입니다.
 #   계정 확인 → _devtools2 받기(있으면 최신으로) → AI 에이전트 CLI 설치(tool.setup-agents.sh)
 #   → AI 공통 설정(tool.setup-agent-notes.sh — agent-notes 받기·규칙 적용) 까지만 하고 끝냅니다.
@@ -39,9 +39,9 @@
 # ==============================================================================
 set -uo pipefail
 
-DT2_REPO_URL="https://github.com/devers2/_devtools2.git"
+DT2_REPO_URL="https://github.com/devershq/_devtools2.git"
 DT2_DIR="/var/opt/_devtools2"
-SETUP_REPO="devers2/_devtools2-setup"
+SETUP_REPO="devershq/_devtools2-setup"
 SETUP_REF="${DT2_SETUP_REF:-main}"
 
 KEEP=""

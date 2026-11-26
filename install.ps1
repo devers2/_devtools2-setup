@@ -1,6 +1,6 @@
 # ==============================================================================
 # DevTools2 설치 시작 스크립트 (Windows + WSL)
-#   irm https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/devershq/_devtools2-setup/main/install.ps1 | iex
 # ==============================================================================
 # 하는 일
 #   1) 관리자 권한으로 다시 실행 (UAC)
@@ -35,7 +35,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::S
 
 # ── 공용 함수(lib/ui.ps1): 이 스크립트와 같은 커밋의 파일을 받습니다 ──
 #   main 의 최신 커밋을 먼저 정해, 받는 도중 push 가 있어도 install.ps1·ui.ps1·install.sh 가 같은 커밋이 되게 합니다.
-$SETUP_REPO = 'devers2/_devtools2-setup'
+$SETUP_REPO = 'devershq/_devtools2-setup'
 if (-not $env:DT2_SETUP_REF) {
     $env:DT2_SETUP_REF = 'main'
     try {
@@ -194,7 +194,7 @@ function Request-RestartForWslFeatures {
     } else {
         Write-Warn "재시작을 건너뛰었습니다. 수동으로 컴퓨터를 재시작한 후 이 스크립트를 다시 실행해 주세요."
         Write-Host ""
-        Write-Host "   irm https://raw.githubusercontent.com/devers2/_devtools2-setup/main/install.ps1 | iex" -ForegroundColor Cyan
+        Write-Host "   irm https://raw.githubusercontent.com/devershq/_devtools2-setup/main/install.ps1 | iex" -ForegroundColor Cyan
         Write-Host ""
         Pause-Script
         Exit-Devtools2Setup 0
