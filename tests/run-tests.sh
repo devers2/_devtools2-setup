@@ -216,7 +216,7 @@ out=$(run "KEEP=y; printf 'protocol=https\nhost=github.com\nusername=me\npasswor
 check "y 이면 이 PC 의 도우미를 그대로 씀 (대조)" 'grep -q "me:kept@github.com" <<<"$out"' "$out"
 rm -f "$T/home/.git-credentials"
 
-echo "▶ 3-1. 저장소 주인별 PAT (Bitwarden 필드 PAT_<주인> — 그 주인의 저장소에만, 나머지는 기본 PAT)"
+echo "▶ 3-1. 저장소 계정별 PAT (Bitwarden 필드 PAT_<계정> — 그 계정의 저장소에만, 나머지는 기본 PAT)"
 # Bitwarden 항목: 기본 PAT + PAT_OrgX(대소문자 무관) + 규칙에 안 맞는 이름·공백 든 값(건너뜀), notes 는 여러 줄
 cat >"$T/item.json" <<'JSON'
 [{"name":"gh-item","login":{"username":"tester@example.com","password":"pw"},"notes":"줄1\n줄2",
@@ -224,28 +224,28 @@ cat >"$T/item.json" <<'JSON'
             {"name":"PAT_bad name","value":"x"},{"name":"PAT_spaced","value":"a b"},{"name":"user.name","value":"tester"}]}]
 JSON
 out=$(run "bw_find_item_by_name \"\$(cat '$T/item.json')\"\$'\n---ITEM_SPLIT---\n' gh-item | head -n 1 | cut -f4,5")
-check "항목 파싱: 4칸 기본 PAT, 5칸 주인별 PAT(소문자, 규칙 밖 이름·공백 값 제외)" '[ "$out" = "$(printf "ghp_default\torgx=github_pat_orgx")" ]' "$out"
+check "항목 파싱: 4칸 기본 PAT, 5칸 계정별 PAT(소문자, 규칙 밖 이름·공백 값 제외)" '[ "$out" = "$(printf "ghp_default\torgx=github_pat_orgx")" ]' "$out"
 out=$(run 'for u in https://github.com/OrgX/r.git https://github.com/orgx https://github.com git@github.com:orgx/r.git; do printf "[%s]" "$(bw_repo_owner "$u")"; done')
-check "주소에서 주인 이름(소문자)" '[ "$out" = "[orgx][orgx][][orgx]" ]' "$out"
+check "주소에서 계정 이름(소문자)" '[ "$out" = "[orgx][orgx][][orgx]" ]' "$out"
 out=$(run 'P="orgx=github_pat_orgx other=github_pat_other"; for u in https://github.com/OrgX/r.git https://github.com/orgxyz/r.git https://github.com/devershq/r.git; do printf "[%s]" "$(bw_pick_pat "$u" ghp_default "$P")"; done')
-check "PAT 고르기: 그 주인만 전용 PAT, 이름 앞부분만 같은 주인·다른 주인은 기본 PAT" '[ "$out" = "[github_pat_orgx][ghp_default][ghp_default]" ]' "$out"
+check "PAT 고르기: 그 계정만 전용 PAT, 이름 앞부분만 같은 계정·다른 계정은 기본 PAT" '[ "$out" = "[github_pat_orgx][ghp_default][ghp_default]" ]' "$out"
 FAKE_FIND6='bw() { echo "{\"status\": \"unlocked\"}"; }; bw_ensure_session() { :; }; bw_find_item_live() { printf "tester\tt@t\tx\tghp_default\torgx=github_pat_orgx\tnote1\nnote2\n"; }'
-out=$(run "$FAKE_FIND6; bw_get_github_account gh-item >/dev/null; echo \"PAT=\$BW_GH_PAT OWN=\$BW_GH_OWNER_PATS\"")
-check "bw_get_github_account: 기본 PAT 와 주인별 PAT 를 따로 담음(notes 여러 줄이어도 첫 줄만)" '[ "$out" = "PAT=ghp_default OWN=orgx=github_pat_orgx" ]' "$out"
+out=$(run "$FAKE_FIND6; bw_get_github_account gh-item >/dev/null; echo \"USER=\$BW_GH_USER EMAIL=\$BW_GH_EMAIL PAT=\$BW_GH_PAT OWN=\$BW_GH_OWNER_PATS\"")
+check "bw_get_github_account: 기본 PAT 와 계정별 PAT 를 따로 담고, notes 가 여러 줄이어도 이름·이메일·PAT 에 섞이지 않음" '[ "$out" = "USER=tester EMAIL=t@t PAT=ghp_default OWN=orgx=github_pat_orgx" ]' "$out"
 out=$(run "KEEP=n; BW_GH_USER=tester; BW_GH_PAT=ghp_default; BW_GH_OWNER_PATS='devershq=github_pat_dt2'
 printf 'url=%s\n\n' \"\$DT2_REPO_URL\" | _git credential fill | grep ^password=")
-check "일회성 clone: DevTools2 저장소 주인의 PAT_<주인> 이 있으면 그것을 씀" '[ "$out" = "password=github_pat_dt2" ]' "$out"
-# 저장: 기본 PAT 는 ~/.git-credentials, 주인별 PAT 는 전용 파일 + 주소별 도우미 — 실제 git 이 주소에 따라 고르는가
+check "일회성 clone: DevTools2 저장소 계정의 PAT_<계정> 이 있으면 그것을 씀" '[ "$out" = "password=github_pat_dt2" ]' "$out"
+# 저장: 기본 PAT 는 ~/.git-credentials, 계정별 PAT 는 전용 파일 + 주소별 도우미 — 실제 git 이 주소에 따라 고르는가
 printf 'https://tester:ghp_default@github.com\n' >"$T/home/.git-credentials"
 run "bw_save_owner_git_credentials 'orgx=github_pat_orgx' tester; bw_save_owner_git_credentials 'orgx=github_pat_orgx2' tester" >/dev/null
 fill() { run "printf 'url=%s\n\n' '$1' | git credential fill 2>/dev/null | grep ^password="; }
 check "git 이 orgx 저장소에는 전용 PAT 를 줌(다시 저장하면 새 값)" '[ "$(fill https://github.com/orgx/r.git)" = "password=github_pat_orgx2" ]' "$(fill https://github.com/orgx/r.git)"
-check "다른 주인·이름 앞부분만 같은 주인에는 기본 PAT" '[ "$(fill https://github.com/orgxyz/r.git)" = "password=ghp_default" ] && [ "$(fill https://github.com/devershq/r.git)" = "password=ghp_default" ]'
+check "다른 계정·이름 앞부분만 같은 계정에는 기본 PAT" '[ "$(fill https://github.com/orgxyz/r.git)" = "password=ghp_default" ] && [ "$(fill https://github.com/devershq/r.git)" = "password=ghp_default" ]'
 out=$(git config --file "$T/home/.gitconfig" --get-all credential.https://github.com/orgx.helper | tr '\n' '|')
 check "다시 실행해도 도우미 설정이 쌓이지 않음(빈 값 + store 두 줄)" '[ "$out" = "|store --file \"$T/home/.config/git/credentials-orgx\"|" ]' "$out"
 check "전용 PAT 파일은 소유자 전용(600)" '[ "$(stat -c %a "$T/home/.config/git/credentials-orgx")" = 600 ]'
 out=$(run "bw_read_stored_github_credential https://github.com/orgx/r.git && echo \"\$BW_STORED_GH_PAT\"; bw_read_stored_github_credential github.com && echo \"\$BW_STORED_GH_PAT\"")
-check "저장된 계정 읽기: 저장소 주소면 그 주인의 PAT, 호스트면 기본 PAT" '[ "$out" = "$(printf "github_pat_orgx2\nghp_default")" ]' "$out"
+check "저장된 계정 읽기: 저장소 주소면 그 계정의 PAT, 호스트면 기본 PAT" '[ "$out" = "$(printf "github_pat_orgx2\nghp_default")" ]' "$out"
 git config --file "$T/home/.gitconfig" --unset-all credential.https://github.com/orgx.helper
 rm -rf "$T/home/.git-credentials" "$T/home/.config/git" "$T/item.json"
 
